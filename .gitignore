@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.coverage
+
+# Virtual environments
+.venv/
+venv/
+
+# Claude Code
+.claude/
+
+# Reverse-engineering artifacts (not part of the published package)
+*.apk
+/apk_extracted/
+/src/
+/jadx/
+/apktool_out/
+all_strings.txt

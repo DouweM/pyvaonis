@@ -1,0 +1,23 @@
+export_capture:
+  name: Export capture
+  description: >-
+    Render a full-resolution image of a capture and save it under the Home Assistant media
+    directory (browsable under Media). Defaults to the capture currently being observed.
+  fields:
+    capture_id:
+      name: Capture ID
+      description: The capture to export. Omit to use the current observation's capture.
+      required: false
+      example: "abc123"
+      selector:
+        text:
+    format:
+      name: Format
+      description: Export format.
+      required: false
+      default: tiff
+      selector:
+        select:
+          options:
+            - tiff
+            - jxl

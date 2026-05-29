@@ -1,0 +1,109 @@
+"""Browse and download the telescope's saved image library over anonymous FTP.
+
+The telescope runs an anonymous FTP server (``10.0.0.1:21``); finished observations live
+under ``/user/<observation>/...`` as ``.jpg`` / ``.tif`` files. ``ftplib`` is synchronous, so
+the public helpers run it in a thread to stay async-friendly (Home Assistant, asyncio CLIs).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import posixpath
+from dataclasses import dataclass
+from ftplib import FTP
+from ftplib import error_perm
+
+from .const import DEFAULT_IP
+from .const import FTP_PORT
+from .const import FTP_ROOT
+
+
+@dataclass
+class FtpEntry:
+    """A file or directory in the saved library."""
+
+    name: str
+    path: str
+    is_dir: bool
+    size: int | None = None
+
+
+class _NatFTP(FTP):
+    """FTP that ignores the server-advertised passive IP (like ``curl --ftp-skip-pasv-ip``).
+
+    The Stellina advertises its own ``10.0.0.1`` in PASV replies; across a Wi-Fi bridge/NAT
+    that address is unreachable, so we always make the data connection to the control host
+    (which is also correct when connected directly). The data *port* still has to be reachable
+    — through a bridge that needs the router's FTP NAT/conntrack helper.
+    """
+
+    def makepasv(self) -> tuple[str, int]:
+        _, port = super().makepasv()
+        return self.host, port
+
+
+def _connect(ip: str, timeout: float) -> FTP:
+    ftp = _NatFTP()
+    ftp.connect(ip, FTP_PORT, timeout=timeout)
+    ftp.login()  # anonymous
+    return ftp
+
+
+def _list(ip: str, path: str, timeout: float) -> list[FtpEntry]:
+    ftp = _connect(ip, timeout)
+    try:
+        entries: list[FtpEntry] = []
+        try:
+            for name, facts in ftp.mlsd(path):
+                if name in (".", ".."):
+                    continue
+                size = facts.get("size")
+                entries.append(
+                    FtpEntry(
+                        name=name,
+                        path=posixpath.join(path, name),
+                        is_dir=facts.get("type") == "dir",
+                        size=int(size) if size and size.isdigit() else None,
+                    )
+                )
+        except error_perm:
+            # Server without MLSD: fall back to NLST and probe directories with CWD.
+            ftp.cwd(path)
+            for name in ftp.nlst():
+                base = posixpath.basename(name)
+                if base in (".", ".."):
+                    continue
+                full = posixpath.join(path, base)
+                is_dir = True
+                try:
+                    ftp.cwd(full)
+                    ftp.cwd(path)
+                except error_perm:
+                    is_dir = False
+                entries.append(FtpEntry(name=base, path=full, is_dir=is_dir))
+        entries.sort(key=lambda e: (not e.is_dir, e.name))
+        return entries
+    finally:
+        ftp.close()
+
+
+def _download(ip: str, path: str, timeout: float) -> bytes:
+    ftp = _connect(ip, timeout)
+    buf = bytearray()
+    try:
+        ftp.retrbinary(f"RETR {path}", buf.extend)
+        return bytes(buf)
+    finally:
+        ftp.close()
+
+
+async def list_dir(
+    path: str = FTP_ROOT, *, ip: str = DEFAULT_IP, timeout: float = 20.0
+) -> list[FtpEntry]:
+    """List a directory in the saved library (defaults to ``/user``)."""
+    return await asyncio.to_thread(_list, ip, path, timeout)
+
+
+async def download(path: str, *, ip: str = DEFAULT_IP, timeout: float = 60.0) -> bytes:
+    """Download a saved file by its FTP path."""
+    return await asyncio.to_thread(_download, ip, path, timeout)

@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Stellina",
+        "description": "Connect to your Stellina telescope. Your Home Assistant host must be able to reach the telescope (directly on its Wi-Fi, or via a bridge).",
+        "data": {
+          "host": "Host"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check that the telescope is on and reachable at this address.",
+      "unknown": "Unexpected error occurred. Please check the logs."
+    },
+    "abort": {
+      "already_configured": "This telescope is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "operation": { "name": "Current operation" },
+      "target": { "name": "Current target" },
+      "step": { "name": "Current step" },
+      "stacking_count": { "name": "Stacked frames" },
+      "integration": { "name": "Integration time" }
+    },
+    "camera": {
+      "live": { "name": "Live view" }
+    },
+    "binary_sensor": {
+      "initialized": { "name": "Initialized" },
+      "has_control": { "name": "Has control" },
+      "dark": { "name": "Dark enough to observe" }
+    },
+    "button": {
+      "take_control": { "name": "Take control" },
+      "park": { "name": "Park" },
+      "stop": { "name": "Stop observation" },
+      "shutdown": { "name": "Shut down" }
+    },
+    "select": {
+      "target": { "name": "Tonight's target" }
+    }
+  }
+}
