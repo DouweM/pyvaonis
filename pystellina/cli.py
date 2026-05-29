@@ -27,7 +27,7 @@ def _main(
     """Stellina CLI."""
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
-        for name in ("pystellina", "socketio", "engineio", "aiohttp", "asyncio"):
+        for name in ("pystellina", "aiohttp", "asyncio"):
             logging.getLogger(name).setLevel(logging.DEBUG)
 
 
@@ -55,7 +55,7 @@ def status(ip: str = const.DEFAULT_IP) -> None:
 
 @app.command()
 def watch(ip: str = const.DEFAULT_IP, seconds: int = 60) -> None:
-    """Stream raw socket.io events (use to discover event names / payloads)."""
+    """Stream raw socket events (use to confirm event names / payloads)."""
 
     async def _watch() -> None:
         scope = StellinaClient(ip=ip)
@@ -63,7 +63,7 @@ def watch(ip: str = const.DEFAULT_IP, seconds: int = 60) -> None:
         async def _dump(event: str, *args: Any) -> None:
             typer.echo(f"[{event}] {json.dumps(args, default=str)[:400]}")
 
-        scope._sio.on("*", _dump)
+        scope._sock.on_any(_dump)
         await scope.connect(status_timeout=seconds)
         await asyncio.sleep(seconds)
         await scope.disconnect()
@@ -84,9 +84,17 @@ def stop(ip: str = const.DEFAULT_IP) -> None:
 
 
 @app.command()
-def shutdown(ip: str = const.DEFAULT_IP) -> None:
-    """Request a board shutdown."""
-    _print(_run(_with_client(ip, True, lambda s: s.request_shutdown())))
+def shutdown(
+    ip: str = const.DEFAULT_IP,
+    yes: bool = typer.Option(False, "--yes", help="confirm: powers off the scope; drops the link"),
+) -> None:
+    """Power off the telescope board (requires --yes; you must press the button to restart)."""
+    if not yes:
+        typer.echo(
+            "Refusing: shutdown powers off the telescope and drops the link. Re-run with --yes."
+        )
+        raise typer.Exit(1)
+    _print(_run(_with_client(ip, True, lambda s: s.request_shutdown(force=True))))
 
 
 @app.command()
@@ -322,9 +330,14 @@ def api(
     control: bool = typer.Option(
         True, "--control/--no-control", help="Take control before non-GET calls."
     ),
+    unsafe: bool = typer.Option(
+        False, "--unsafe", help="Allow destructive (delete/reset) or solar (sun/*) endpoints."
+    ),
     ip: str = const.DEFAULT_IP,
 ) -> None:
     """Make a signed REST call, gh-style. Prints HTTP status + JSON body.
+
+    Firmware upload is always blocked; delete/reset/solar endpoints need --unsafe.
 
     Examples:
       stellina api app/status
@@ -347,7 +360,7 @@ def api(
     async def _go(scope: StellinaClient) -> Any:
         if control and verb != "GET":
             await scope.take_control()
-        return await scope.call(verb, endpoint, body)
+        return await scope.call(verb, endpoint, body, allow_unsafe=unsafe)
 
     result = _run(_with_client(ip, False, _go))
     typer.echo(f"HTTP {result['status']}", err=True)
@@ -510,10 +523,15 @@ def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = const.DEFAULT_IP) -> 
 
 
 @app.command()
-def post(endpoint: str, json_body: str = "{}", ip: str = const.DEFAULT_IP) -> None:
+def post(
+    endpoint: str,
+    json_body: str = "{}",
+    ip: str = const.DEFAULT_IP,
+    unsafe: bool = typer.Option(False, "--unsafe", help="Allow destructive/solar endpoints."),
+) -> None:
     """Raw signed POST to a ``/v1`` endpoint (see also: `api`)."""
     body = json.loads(json_body)
-    _print(_run(_with_client(ip, True, lambda s: s.post(endpoint, body))))
+    _print(_run(_with_client(ip, True, lambda s: s.post(endpoint, body, allow_unsafe=unsafe))))
 
 
 @app.command()

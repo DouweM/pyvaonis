@@ -6,9 +6,14 @@ Lifecycle::
         await scope.take_control()
         await scope.park()
 
-The client opens a socket.io connection (port 8083) to receive the live status
-stream (which carries the rotating auth ``challenge``) and to acquire control, and
-issues REST commands (port 8082) signed per-request from the latest status.
+The client opens a Socket.IO v2 / Engine.IO v3 connection (port 8083) to receive the live
+status stream (which carries the rotating auth ``challenge`` and arrives as ``STATUS_UPDATED``)
+and to acquire control, and issues REST commands (port 8082) signed per-request from the latest
+status.
+
+**Safety:** the firmware-upload endpoint is never callable; irreversible (delete/reset) and
+solar (``sun/*``) endpoints require an explicit opt-in; and state-changing commands are guarded
+against being issued without control, while shutting down, or mid-operation. See PROTOCOL.md.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from collections.abc import Awaitable
 from collections.abc import Callable
@@ -23,11 +29,12 @@ from types import TracebackType
 from typing import Any
 
 import aiohttp
-import socketio
-from socketio.exceptions import ConnectionError as SioConnectionError
 
+from . import astro
 from . import const
 from . import ftp
+from ._eio3 import EngineIO3Client
+from ._eio3 import StellinaSocketError
 from .auth import build_auth_header
 from .ftp import FtpEntry
 from .models import AutoInitBody
@@ -51,14 +58,14 @@ class StellinaConnectionError(StellinaError):
 
 
 class StellinaCommandError(StellinaError):
-    """The telescope rejected a command or returned a non-success result."""
+    """The telescope rejected a command or it was refused by a client-side safety guard."""
 
 
 def _extract_status(args: list[Any]) -> dict[str, Any] | None:
-    """Find a status dict (one containing ``challenge``) in a socket.io payload.
+    """Fallback: find a status dict (one containing ``challenge``) in an event payload.
 
-    The exact inbound event name is set in the one method that did not decompile, so
-    we accept status from any event by shape rather than by name (see PROTOCOL.md §2).
+    The primary path is the ``STATUS_UPDATED`` event; this shape-based detection is a safety net
+    in case a firmware variant uses a different event name.
     """
     for item in args:
         if isinstance(item, str):
@@ -94,18 +101,21 @@ class StellinaClient:
         self.country_code = country_code
         self.request_timeout = request_timeout
         self.status: StellinaStatus | None = None
+        self.last_control_error: Any = None
 
         self._session = session
         self._owns_session = session is None
-        self._sio = socketio.AsyncClient(reconnection=True)
         self._first_status = asyncio.Event()
         self._status_callbacks: list[StatusCallback] = []
-        self._sio.on("*", self._on_any_event)
+        self._sock = EngineIO3Client()
+        self._sock.on(const.EVENT_STATUS, self._on_status)
+        self._sock.on(const.EVENT_CONTROL_ERROR, self._on_control_error)
+        self._sock.on_any(self._on_any)
 
     @property
     def connected(self) -> bool:
-        """Whether the socket.io connection is currently open."""
-        return self._sio.connected
+        """Whether the socket connection is currently open."""
+        return self._sock.connected
 
     # -- context management -------------------------------------------------------------
     async def __aenter__(self) -> StellinaClient:
@@ -120,16 +130,30 @@ class StellinaClient:
     ) -> None:
         await self.disconnect()
 
-    # -- socket.io ----------------------------------------------------------------------
+    # -- socket ------------------------------------------------------------------------
     def on_status(self, callback: StatusCallback) -> None:
         """Register a callback invoked on every status push."""
         self._status_callbacks.append(callback)
 
-    async def _on_any_event(self, event: str, *args: Any) -> None:
-        raw = _extract_status(list(args))
+    async def _on_status(self, payload: Any) -> None:
+        raw = payload if isinstance(payload, dict) else _extract_status([payload])
         if raw is None:
-            _LOGGER.debug("socket.io event %s carried no status", event)
             return
+        await self._apply_status(raw)
+
+    async def _on_control_error(self, payload: Any) -> None:
+        self.last_control_error = payload
+        _LOGGER.warning("Stellina CONTROL_ERROR: %s", payload)
+
+    async def _on_any(self, event: str, *args: Any) -> None:
+        if event == const.EVENT_STATUS:
+            return  # handled by _on_status
+        raw = _extract_status(list(args))
+        if raw is not None:
+            _LOGGER.debug("status recovered from event %s (not %s)", event, const.EVENT_STATUS)
+            await self._apply_status(raw)
+
+    async def _apply_status(self, raw: dict[str, Any]) -> None:
         status = StellinaStatus.model_validate(raw)
         self.status = status
         self._first_status.set()
@@ -139,44 +163,55 @@ class StellinaClient:
                 await result
 
     async def connect(self, *, status_timeout: float = 15.0) -> StellinaStatus:
-        """Open the socket.io connection and wait for the first status."""
+        """Open the socket connection and wait for the first status."""
         if self._session is None:
             self._session = aiohttp.ClientSession()
+        self._sock._session = self._session  # share our session; we own its lifecycle
+        self._sock._owns_session = False
         query = f"id={self.device_id}&name={self.name}&countryCode={self.country_code}"
-        url = f"{const.socket_url(self.ip)}/?{query}"
         try:
-            # transports=["websocket"] skips the polling handshake; drop if it fails.
-            await self._sio.connect(url, socketio_path=const.SOCKET_PATH, transports=["websocket"])
-        except SioConnectionError as err:
-            raise StellinaConnectionError(f"socket.io connect failed: {err}") from err
+            await self._sock.connect(self.ip, const.SOCKET_PORT, const.SOCKET_PATH, query)
+        except (StellinaSocketError, aiohttp.ClientError, TimeoutError, OSError) as err:
+            raise StellinaConnectionError(f"socket connect failed: {err}") from err
         try:
             await asyncio.wait_for(self._first_status.wait(), timeout=status_timeout)
         except TimeoutError as err:
             raise StellinaConnectionError(
-                "connected but received no status with a 'challenge' "
-                "(check socket.io version / event name, see PROTOCOL.md)"
+                "connected but received no STATUS_UPDATED with a 'challenge' "
+                "(check Engine.IO version / event name — run `stellina --debug watch`)"
             ) from err
         assert self.status is not None
         return self.status
 
     async def disconnect(self) -> None:
-        """Disconnect socket.io and close the session if we created it."""
+        """Release control if held, then disconnect and close our session."""
         try:
-            await self._sio.disconnect()
+            if self.connected and self.has_control:
+                await self.release_control()
         except Exception:
-            _LOGGER.debug("error disconnecting socket.io", exc_info=True)
+            _LOGGER.debug("error releasing control on disconnect", exc_info=True)
+        try:
+            await self._sock.disconnect()
+        except Exception:
+            _LOGGER.debug("error disconnecting socket", exc_info=True)
         if self._owns_session and self._session is not None:
             await self._session.close()
             self._session = None
 
     async def _emit(self, key: str, value: Any | None = None) -> None:
         if value is None:
-            await self._sio.emit(const.SOCKET_EVENT, key)
+            await self._sock.emit(const.SOCKET_EVENT, key)
         else:
-            await self._sio.emit(const.SOCKET_EVENT, key, value)
+            await self._sock.emit(const.SOCKET_EVENT, key, value)
 
     async def take_control(self) -> None:
-        """Become the controlling ("master") device."""
+        """Become the controlling ("master") device.
+
+        Note: this forcibly takes control — if the owner's phone app currently holds it, it will
+        be demoted. (The phone can take it back, after which our commands will start failing.)
+        """
+        if self.status and self.status.master_device_id and not self.has_control:
+            _LOGGER.warning("taking control from current master %s", self.status.master_device_id)
         await self._emit(const.MSG_TAKE_CONTROL)
         await self._emit(const.MSG_SET_USER_NAME, {"device": self.device_id, "user": self.name})
 
@@ -189,6 +224,43 @@ class StellinaClient:
         """Whether this device currently holds control."""
         return bool(self.status and self.status.master_device_id == self.device_id)
 
+    # -- safety / precondition guards ---------------------------------------------------
+    def _require_control(self, action: str) -> None:
+        if self.status is None:
+            raise StellinaCommandError(f"{action}: not connected (no status yet)")
+        if self.status.shutting_down:
+            raise StellinaCommandError(f"{action}: telescope is shutting down")
+        if not self.has_control:
+            raise StellinaCommandError(
+                f"{action}: this client does not hold control; take_control() first"
+            )
+
+    def _require_idle(self, action: str) -> None:
+        self._require_control(action)
+        assert self.status is not None
+        busy = self.status.active_operation
+        if busy:
+            raise StellinaCommandError(
+                f"{action}: an operation is already running ({busy}); stop it first"
+            )
+
+    @staticmethod
+    def _guard_endpoint(endpoint: str, *, allow_unsafe: bool) -> None:
+        base = endpoint.split("?", 1)[0].strip("/")
+        if base == const.FIRMWARE_ENDPOINT:
+            raise StellinaCommandError(
+                f"refusing {base}: firmware upload is blocked (the only true brick vector)"
+            )
+        if not allow_unsafe and base in const.DESTRUCTIVE_ENDPOINTS:
+            raise StellinaCommandError(
+                f"refusing {base}: irreversible (data-loss/reset). Pass allow_unsafe=True to override."
+            )
+        if not allow_unsafe and base.startswith(const.SOLAR_ENDPOINT_PREFIX):
+            raise StellinaCommandError(
+                f"refusing {base}: solar mode requires the Vaonis solar filter — "
+                "pass allow_unsafe=True only if it is installed (else the sensor can be destroyed)."
+            )
+
     # -- REST ---------------------------------------------------------------------------
     def _auth_header(self) -> str:
         if self.status is None:
@@ -196,9 +268,15 @@ class StellinaClient:
         return build_auth_header(*self.status.auth_args())
 
     async def request(
-        self, method: str, endpoint: str, body: dict[str, Any] | None = None
+        self,
+        method: str,
+        endpoint: str,
+        body: dict[str, Any] | None = None,
+        *,
+        allow_unsafe: bool = False,
     ) -> dict[str, Any]:
-        """Low-level signed REST call. Returns the parsed JSON body."""
+        """Low-level signed REST call. Returns the parsed JSON body. Enforces endpoint guards."""
+        self._guard_endpoint(endpoint, allow_unsafe=allow_unsafe)
         if self._session is None:
             raise StellinaCommandError("client not connected")
         url = const.base_url(self.ip) + endpoint
@@ -208,7 +286,7 @@ class StellinaClient:
             async with self._session.request(
                 method,
                 url,
-                json=body if method == "POST" else None,
+                json=body if method.upper() != "GET" else None,
                 headers=headers,
                 timeout=timeout,
             ) as resp:
@@ -226,13 +304,18 @@ class StellinaClient:
             raise StellinaConnectionError(f"{endpoint}: {err}") from err
 
     async def call(
-        self, method: str, endpoint: str, body: dict[str, Any] | None = None
+        self,
+        method: str,
+        endpoint: str,
+        body: dict[str, Any] | None = None,
+        *,
+        allow_unsafe: bool = False,
     ) -> dict[str, Any]:
         """Signed REST call for debugging: returns ``{status, body}`` and never raises on HTTP.
 
-        Unlike :meth:`request`, this surfaces the HTTP status and raw body even on errors —
-        the building block for the ``stellina api`` command.
+        Still enforces the endpoint safety guards (firmware/destructive/solar).
         """
+        self._guard_endpoint(endpoint, allow_unsafe=allow_unsafe)
         if self._session is None:
             raise StellinaCommandError("client not connected")
         url = const.base_url(self.ip) + endpoint
@@ -249,9 +332,13 @@ class StellinaClient:
                 parsed = text
             return {"status": resp.status, "body": parsed}
 
-    async def post(self, endpoint: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def post(
+        self, endpoint: str, body: dict[str, Any] | None = None, *, allow_unsafe: bool = False
+    ) -> dict[str, Any]:
         """POST a JSON body to an endpoint (defaults to ``{}``)."""
-        return await self.request("POST", endpoint, body if body is not None else {})
+        return await self.request(
+            "POST", endpoint, body if body is not None else {}, allow_unsafe=allow_unsafe
+        )
 
     async def get(self, endpoint: str) -> dict[str, Any]:
         """GET an endpoint."""
@@ -266,8 +353,9 @@ class StellinaClient:
         self, latitude: float, longitude: float, *, skip_auto_focus: bool = False
     ) -> dict[str, Any]:
         """Initialise/align the telescope at a location."""
-        import time
-
+        if not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
+            raise StellinaCommandError(f"latitude/longitude out of range: {latitude},{longitude}")
+        self._require_idle("start_autoinit")
         body = AutoInitBody(
             latitude=latitude,
             longitude=longitude,
@@ -279,11 +367,31 @@ class StellinaClient:
     async def stop_autoinit(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_AUTOINIT)
 
-    async def start_observation(self, observation: ObservationBody) -> dict[str, Any]:
-        """Slew to a target and start imaging."""
+    async def start_observation(
+        self, observation: ObservationBody, *, allow_solar: bool = False
+    ) -> dict[str, Any]:
+        """Slew to a target and start imaging.
+
+        Refuses unless the scope is initialised and idle, and (without ``allow_solar``) refuses
+        targets within ~10° of the Sun.
+        """
+        self._require_idle("start_observation")
+        assert self.status is not None
+        if not self.status.initialized:
+            raise StellinaCommandError(
+                "start_observation: telescope not initialised; run autoinit first"
+            )
+        if not allow_solar and observation.ra is not None and observation.de is not None:
+            sep = astro.separation_from_sun(observation.ra, observation.de)
+            if sep < const.SOLAR_EXCLUSION_DEG:
+                raise StellinaCommandError(
+                    f"target is {sep:.1f}° from the Sun (<{const.SOLAR_EXCLUSION_DEG}°); refused. "
+                    "Imaging near the Sun without the Vaonis solar filter destroys the sensor. "
+                    "Pass allow_solar=True only if the filter is installed."
+                )
         return await self.post(const.Endpoint.START_OBSERVATION, observation.to_payload())
 
-    async def observe_object(self, object_id: str) -> dict[str, Any]:
+    async def observe_object(self, object_id: str, *, allow_solar: bool = False) -> dict[str, Any]:
         """Slew to a catalog object (by id or name) using its recommended settings."""
         from .catalog import get_object
 
@@ -294,7 +402,7 @@ class StellinaClient:
             observation = obj.to_observation()  # resolves ephemeris for solar objects
         except RuntimeError as err:  # ephem not installed for a solar object
             raise StellinaCommandError(str(err)) from err
-        return await self.start_observation(observation)
+        return await self.start_observation(observation, allow_solar=allow_solar)
 
     async def stop_observation(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_OBSERVATION)
@@ -367,11 +475,40 @@ class StellinaClient:
         return await ftp.download(path, ip=self.ip)
 
     async def park(self) -> dict[str, Any]:
+        """Return the arm to its parked position (refused mid-operation; stop first)."""
+        self._require_idle("park")
         return await self.post(const.Endpoint.PARK)
 
-    async def request_shutdown(self) -> dict[str, Any]:
+    async def request_shutdown(self, *, force: bool = False) -> dict[str, Any]:
+        """Power off the telescope board (drops the link; needs the physical button to restart).
+
+        Refused while an operation is running unless ``force=True``.
+        """
+        self._require_control("request_shutdown")
+        assert self.status is not None
+        if self.status.is_busy and not force:
+            raise StellinaCommandError(
+                f"request_shutdown: operation running ({self.status.active_operation}); "
+                "stop it first or pass force=True"
+            )
+        _LOGGER.warning("requesting shutdown — the telescope will power off and drop the link")
         return await self.post(const.Endpoint.REQUEST_SHUTDOWN)
 
-    async def switch_frequency(self, band: str) -> dict[str, Any]:
-        """Switch the access point band (``const.BAND_2_4_GHZ`` / ``const.BAND_5_GHZ``)."""
+    async def switch_frequency(self, band: str, *, force: bool = False) -> dict[str, Any]:
+        """Switch the access-point band. **This drops your connection** — you must rejoin.
+
+        ``band`` must be ``const.BAND_2_4_GHZ`` or ``const.BAND_5_GHZ``. Refused mid-operation
+        unless ``force=True``.
+        """
+        if band not in (const.BAND_2_4_GHZ, const.BAND_5_GHZ):
+            raise StellinaCommandError(f"invalid band {band!r} (use BAND_2_4_GHZ or BAND_5_GHZ)")
+        self._require_control("switch_frequency")
+        assert self.status is not None
+        if self.status.is_busy and not force:
+            raise StellinaCommandError(
+                f"switch_frequency: operation running ({self.status.active_operation}); pass force=True"
+            )
+        _LOGGER.warning(
+            "switching Wi-Fi band to %s — the connection will drop; rejoin to continue", band
+        )
         return await self.post(const.Endpoint.SWITCH_FREQUENCY, {"band": band})

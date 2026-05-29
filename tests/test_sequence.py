@@ -15,6 +15,7 @@ def test_parse_spec() -> None:
 class FakeClient:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.status = None  # _wait_idle treats None as "idle"
 
     async def take_control(self) -> None:
         self.calls.append("take_control")
@@ -34,7 +35,7 @@ class FakeClient:
         self.calls.append("park")
         return {"success": True}
 
-    async def request_shutdown(self) -> dict:
+    async def request_shutdown(self, *, force: bool = False) -> dict:
         self.calls.append("shutdown")
         return {"success": True}
 

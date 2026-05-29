@@ -17,7 +17,6 @@ classifiers = [
 requires-python = ">=3.13"
 dependencies = [
     "aiohttp>=3.9",
-    "python-socketio[asyncio_client]>=5.11",
     "pynacl>=1.5",
     "pydantic>=2.10",
 ]

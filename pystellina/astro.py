@@ -69,6 +69,21 @@ def sun_position(when: datetime) -> tuple[float, float]:
     return ra % 360.0, dec
 
 
+def angular_separation(ra1_deg: float, dec1_deg: float, ra2_deg: float, dec2_deg: float) -> float:
+    """Great-circle angle (degrees) between two equatorial positions."""
+    ra1, dec1, ra2, dec2 = map(math.radians, (ra1_deg, dec1_deg, ra2_deg, dec2_deg))
+    cos_sep = math.sin(dec1) * math.sin(dec2) + math.cos(dec1) * math.cos(dec2) * math.cos(
+        ra1 - ra2
+    )
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos_sep))))
+
+
+def separation_from_sun(ra_deg: float, dec_deg: float, when: datetime | None = None) -> float:
+    """Angular distance (degrees) of an RA/Dec from the Sun — for solar-safety checks."""
+    sun_ra, sun_dec = sun_position(when or datetime.now(UTC))
+    return angular_separation(ra_deg, dec_deg, sun_ra, sun_dec)
+
+
 def sun_altitude(latitude: float, longitude: float, when: datetime | None = None) -> float:
     """Geometric altitude of the Sun (degrees)."""
     when = when or datetime.now(UTC)

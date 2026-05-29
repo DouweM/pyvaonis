@@ -34,28 +34,31 @@ DEFAULT_SOCKET_IO_PATH = "/socket.io"
 (There are also dev/simulator contexts, e.g. `ursa.dev.vaonis.com` with `/stellina/http` &
 `/stellina/socket` paths — useful to know the path layout, not needed for the real device.)
 
-## 2. socket.io channel (status + control) — port 8083
+## 2. Socket.IO channel (status + control) — port 8083
 
-Client connects to `http://10.0.0.1:8083`, socket.io path `/socket.io`, with query string:
-```
-id=<deviceId>&name=<deviceName>&countryCode=<cc>
-```
-`deviceId` is an arbitrary client id (app uses a per-install UUID); it's what identifies you
-as the controlling device. ⚠️ **socket.io / Engine.IO version** is whatever the bundled
-`io.socket:socket.io-client` Java lib negotiates — confirm EIO3 vs EIO4 on hardware.
+**Socket.IO v2 / Engine.IO protocol v3 (`EIO=3`)** — confirmed from the decompiled
+`StellinaSocketV2.connect()` (recovered via smali) and `io/socket/engineio/client/Socket.smali`,
+which hardcodes `EIO=3`. This matters: `python-socketio` 5.x / `python-engineio` 4.x speak only
+`EIO=4` and **cannot** connect (you get a link but never any events) — hence `pystellina` ships its
+own tiny EIO3 client (`pystellina/_eio3.py`).
+
+Connect: websocket to `ws://10.0.0.1:8083/socket.io/?EIO=3&transport=websocket&<query>`, default
+namespace, query `id=<deviceId>&name=<deviceName>&countryCode=<cc>`, connect timeout 8 s. Heartbeat
+is **client-initiated** (client sends `2` ping every `pingInterval`; server replies `3`). The app
+uses polling-first then upgrades; websocket-direct also works.
 
 **Outbound** (client → telescope) — all via `emit("message", <key>[, <value>])`:
 | key            | value                              | meaning |
 |----------------|------------------------------------|---------|
-| `takeControl`  | —                                  | become the master/controller |
+| `takeControl`  | —                                  | become master (forcibly demotes the current controller) |
 | `releaseControl`| —                                 | give up control |
 | `setUserName`  | `{ "device": <deviceId>, "user": <name|"null"> }` | label this client |
 | `setSystemTime`| `<epochMillis>`                    | set telescope clock |
 
-**Inbound** (telescope → client): delivered to `onSocketStatus(...)`, parsed by Moshi into
-`StellinaStatus`. ⚠️ The event name is set in `StellinaSocketV2.connect()` (that one method
-failed to decompile). Discover it on hardware with a catch-all listener — it's almost
-certainly `"message"` or `"status"`. The payload is the full status JSON.
+**Inbound** (telescope → client): event **`STATUS_UPDATED`**, whose single argument is the full
+status **JSON object** (not a string), parsed into `StellinaStatus`. Also **`CONTROL_ERROR`** for
+control errors. The server pushes `STATUS_UPDATED` on its own cadence after connect — no emit is
+required first. (`connect`/`disconnect`/`reconnect`/`error` are lifecycle events.)
 
 `StellinaStatus` carries (selected): `challenge`, `telescopeId`, `bootCount`, `initialized`,
 `masterDeviceId` (who has control), `model`, `internalBattery`, `motors`, `network`, `filter`,
@@ -126,6 +129,30 @@ POST userManager/makeResetRequest | userManager/applyResetResponse
 GET  (Streaming) <url>              downloadImage(@Url)  — full image URL comes from status
 POST updates/uploadUpdateFile (multipart)   POST logs/consume
 ```
+
+## Command safety (audited against the decompiled code)
+
+Risk classes for the 38 endpoints + socket emits, and how `pystellina` guards them:
+
+- **Brick (firmware):** `updates/uploadUpdateFile` — the only true brick vector. **Never callable**
+  in `pystellina` (hard-blocked in `request`/`call`, even with `allow_unsafe`).
+- **Irreversible (data/ownership):** `storage/deleteUserStorageFolders`,
+  `captureStore/deleteStoredCapture`, `userManager/makeResetRequest` + `applyResetResponse`
+  (control/owner reset). Refused unless `allow_unsafe=True` (CLI `--unsafe`).
+- **Hardware damage (solar):** `sun/*` and any target within `SOLAR_EXCLUSION_DEG` (10°) of the Sun
+  — refused unless `allow_solar`/`allow_unsafe`; imaging the Sun without the Vaonis filter destroys
+  the sensor. (Software can't verify the filter.)
+- **Disconnect (recoverable):** `board/requestShutdown` (powers off; physical button to restart),
+  `network/switchFrequency` (changes Wi-Fi band → rejoin). Warned + guarded.
+- **Control:** `takeControl` forcibly demotes the phone app (the firmware ignores the app's advisory
+  `canTakeControl`); the phone can take it back, after which our signed commands start failing.
+
+Preconditions enforced by the app via `Instrument.can*` (mirrored in `pystellina`):
+`canSendRequest` = not `shuttingDown` + connected + **we are master** (`masterDeviceId == us`).
+`startObservation` additionally requires `initialized == true` and **no operation running**
+(`current*Operation` all stopped/absent). `park`/`openForMaintenance` require no running operation;
+`openForMaintenance` also requires `isParked`. `pystellina` refuses out-of-state commands and, in
+`sequence`, waits for the scope to go idle before `park`/`requestShutdown`.
 
 ## 5. `StartObservationBody` (the "go observe target X" payload)
 

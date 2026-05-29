@@ -59,8 +59,30 @@ class Endpoint:
     STOP_PLAN: Final = "planner/stopPlan"
 
 
+# Inbound socket.io event names (from decompiled StellinaSocketV2.connect, recovered via smali).
+EVENT_STATUS: Final = "STATUS_UPDATED"  # payload is the StellinaStatus JSON object
+EVENT_CONTROL_ERROR: Final = "CONTROL_ERROR"
+
 # socket.io control messages, emitted as emit("message", <key>[, <value>]).
 SOCKET_EVENT: Final = "message"
+
+# --- Safety classification (see PROTOCOL.md "Command safety"). -------------------------
+# Firmware upload is the only true brick vector — never callable, even via the raw passthrough.
+FIRMWARE_ENDPOINT: Final = "updates/uploadUpdateFile"
+# Irreversible data-loss / ownership-reset endpoints — require an explicit opt-in to call.
+DESTRUCTIVE_ENDPOINTS: Final = frozenset(
+    {
+        "storage/deleteUserStorageFolders",
+        "captureStore/deleteStoredCapture",
+        "userManager/applyResetResponse",
+        "userManager/makeResetRequest",
+    }
+)
+# Pointing at/near the Sun without the Vaonis solar filter can destroy the sensor.
+SOLAR_ENDPOINT_PREFIX: Final = "sun/"
+SOLAR_EXCLUSION_DEG: Final = 10.0
+# Commands that drop the Wi-Fi link (recoverable, but you lose the session).
+DISCONNECT_ENDPOINTS: Final = frozenset({"board/requestShutdown", "network/switchFrequency"})
 MSG_TAKE_CONTROL: Final = "takeControl"
 MSG_RELEASE_CONTROL: Final = "releaseControl"
 MSG_SET_USER_NAME: Final = "setUserName"

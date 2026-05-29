@@ -7,16 +7,20 @@ Reverse-engineered from *Singularity by Vaonis* v1.38.10 (`com.vaonis.barnard`).
 wire protocol is documented in [`PROTOCOL.md`](PROTOCOL.md); this README is the usage +
 developer/agent reference.
 
-> ⚠️ **Status: alpha, validated statically.** The crypto/auth, catalog, astronomy, sequencing,
-> and parsing are unit-tested, but the *live* socket.io connection and the exact status/image
-> JSON shapes have not yet been confirmed against hardware. See
-> [Hardware validation](#hardware-validation) for the 10-minute checklist.
+> ⚠️ **Status: alpha, not yet run against hardware.** The crypto/auth, catalog, astronomy,
+> sequencing, parsing, the EIO3 frame codec, and the safety guards are unit-tested. The socket
+> protocol (Engine.IO **v3**, event `STATUS_UPDATED`) was recovered from the decompiled app, so the
+> two earlier unknowns are resolved — but the live connection and exact status/image JSON shapes
+> still want one on-hardware confirmation (`stellina --debug watch`). See
+> [Hardware validation](#hardware-validation). A full safety audit of the decompiled commands
+> informs the [guards](#safety) below — the firmware-upload (brick) endpoint is never callable.
 
 ---
 
 ## Contents
 - [What it can do](#what-it-can-do)
 - [How it works](#how-it-works)
+- [Safety](#safety)
 - [Install](#install)
 - [CLI reference](#cli-reference)
 - [Library reference](#library-reference)
@@ -55,7 +59,7 @@ The Stellina is its own Wi-Fi access point at `10.0.0.1` with three services:
 | Channel | Endpoint | Use |
 |---|---|---|
 | REST (OkHttp/Retrofit) | `http://10.0.0.1:8082/v1/` | commands (park, observe, autoinit, export, …) |
-| socket.io | `http://10.0.0.1:8083` (`/socket.io`) | live status stream + take/release control |
+| Socket.IO v2 / EIO3 | `ws://10.0.0.1:8083/socket.io/?EIO=3` | live status (`STATUS_UPDATED`) + take/release control |
 | HTTP images | `http://10.0.0.1:8082<path>` | live stacked frames + full-res exports (no auth) |
 | FTP (anonymous) | `10.0.0.1:21` (`/user/...`) | the saved image library |
 
@@ -64,6 +68,26 @@ rotating `challenge` from the status stream, using keys embedded in the app — 
 [`pystellina/auth.py`](pystellina/auth.py), so no server/account is needed. The `challenge`
 changes with every status push, so the client signs each request from the latest status (you must
 have a socket.io status before REST calls authenticate).
+
+## Safety
+
+The commands were audited against the decompiled app for anything that could brick, damage, or
+lose data on the telescope (see [PROTOCOL.md → Command safety](PROTOCOL.md)). Guards baked into the
+client:
+
+- **Firmware upload (`updates/uploadUpdateFile`) — the only true brick vector — is never callable**,
+  even through the raw `api`/`post` passthrough.
+- **Irreversible** endpoints (delete library/captures, owner/control reset) require an explicit
+  opt-in: `allow_unsafe=True` / CLI `--unsafe`.
+- **Solar**: `sun/*` and any target within 10° of the Sun are refused unless `allow_solar`/`--unsafe`
+  (imaging the Sun without the Vaonis filter destroys the sensor — software can't verify the filter).
+- **Disconnecting** commands warn first: `shutdown` needs `--yes`; `switch_frequency` validates the
+  band and warns it drops the link.
+- **State guards** mirror the app: commands need control (`master`), the scope not shutting down, and
+  (for observe) `initialized` + no operation already running; `sequence` waits for idle before
+  parking/shutting down. `take_control` warns that it demotes the phone app.
+
+None of this is a substitute for care, but the dangerous surfaces are gated rather than one typo away.
 
 ## Install
 
@@ -327,11 +351,10 @@ validates the integration with hassfest + HACS. `publish.yml` builds and publish
 
 ## Hardware validation
 
-Two things couldn't be confirmed statically (the one `connect()` method didn't decompile):
-1. **socket.io / Engine.IO version** — if `connect` fails, drop `transports=["websocket"]` in
-   `StellinaClient.connect()` (EIO3 vs EIO4).
-2. **Inbound status event name** — the client auto-detects status by the `challenge` field, so it's
-   resilient; confirm payload shapes with `stellina watch`.
+The socket protocol is now pinned from the decompiled app: **Engine.IO v3** over websocket, inbound
+event **`STATUS_UPDATED`** (a JSON object), client-initiated ping — implemented in `pystellina/_eio3.py`.
+The client still keeps a shape-based fallback (detect status by the `challenge` field) in case a
+firmware variant differs. What remains is a one-time confirmation that the live frames match.
 
 On the Stellina Wi-Fi, in order: `stellina doctor` (reachability), `stellina --debug watch` (confirm
 event names / payload shapes), then `stellina selftest 52.37 4.90` which runs the whole functional

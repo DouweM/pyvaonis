@@ -13,6 +13,22 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+# Per-mode operation objects in the status JSON; a non-stopped one means the scope is busy.
+_OPERATION_KEYS = (
+    "currentObservationOperation",
+    "currentAutoInitOperation",
+    "currentParkOperation",
+    "currentOpenOperation",
+    "currentDarkCalibrationOperation",
+    "currentPlanOperation",
+    "currentPlaylistOperation",
+    "currentStorageAcquisitionOperation",
+    "currentSunModeOperation",
+    "currentSunObservationOperation",
+    "currentDeleteFoldersOperation",
+    "currentOperation",
+)
+
 
 class StellinaStatus(BaseModel):
     """Subset of ``com.vaonis.instruments.sdk.models.status.StellinaStatus``."""
@@ -24,12 +40,28 @@ class StellinaStatus(BaseModel):
     boot_count: int | None = Field(default=None, alias="bootCount")
     master_device_id: str | None = Field(default=None, alias="masterDeviceId")
     initialized: bool | None = None
+    shutting_down: bool | None = Field(default=None, alias="shuttingDown")
     model: str | None = None
 
     @property
     def raw(self) -> dict[str, Any]:
         """The full status payload, including fields not modelled above."""
         return self.model_dump(by_alias=True)
+
+    @property
+    def active_operation(self) -> str | None:
+        """Name of the running operation (a non-stopped ``current*Operation``), or None if idle."""
+        raw = self.raw
+        for key in _OPERATION_KEYS:
+            op = raw.get(key)
+            if isinstance(op, dict) and not op.get("stopped"):
+                return key
+        return None
+
+    @property
+    def is_busy(self) -> bool:
+        """Whether an operation is currently running."""
+        return self.active_operation is not None
 
     @property
     def can_authenticate(self) -> bool:
@@ -77,6 +109,11 @@ class ObservationBody(BaseModel):
     gain: int | None = None
     exposure_micro_sec: int | None = Field(default=None, serialization_alias="exposureMicroSec")
     do_stacking: bool = Field(default=True, serialization_alias="doStacking")
+    # Fields the app's getStartObservationParams ALWAYS sends for a standard deep-sky target
+    # (decompiled defaults). Kept overridable; firmware may rely on these for correct pointing.
+    observation_type: str = Field(default="STANDARD", serialization_alias="observationType")
+    algorithm: str = Field(default="DEEP_SKY", serialization_alias="algorithm")
+    bright_zone_offset: str = Field(default="NEAR", serialization_alias="brightZoneOffset")
 
     def to_payload(self) -> dict[str, Any]:
         """JSON body with ``None`` fields dropped."""

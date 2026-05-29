@@ -9,6 +9,7 @@ shut the telescope down at the end — "follow these 5 things tonight and turn o
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Awaitable
 from collections.abc import Callable
@@ -113,9 +114,30 @@ async def run_sequence(
                     break
             await _emit(on_event, SequenceEvent("finished", item))
     finally:
-        await client.stop_observation()
+        # Tear down in a safe order, waiting for each step to actually complete so we never
+        # park mid-slew or cut power mid-operation.
+        with contextlib.suppress(Exception):  # may already be idle
+            await client.stop_observation()
+        await _wait_idle(client, poll_interval)
         if park_at_end:
-            await client.park()
+            try:
+                await client.park()
+                await _wait_idle(client, poll_interval)
+            except Exception as err:
+                await _emit(on_event, SequenceEvent("skipped", detail={"park_error": str(err)}))
         if shutdown_at_end:
-            await client.request_shutdown()
+            await client.request_shutdown(force=True)
     await _emit(on_event, SequenceEvent("done", detail={"shutdown": shutdown_at_end}))
+
+
+async def _wait_idle(
+    client: StellinaClient, poll_interval: float, *, timeout: float = 180.0
+) -> bool:
+    """Wait until no operation is running (so park/shutdown are safe). Returns False on timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = client.status
+        if status is None or not status.is_busy:
+            return True
+        await asyncio.sleep(min(poll_interval, max(1.0, deadline - time.monotonic())))
+    return False
