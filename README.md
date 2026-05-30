@@ -132,7 +132,7 @@ control, busy, unreachable) print one clean line; add `--debug` for the full tra
 | `recent [--limit N]` | List recent capture runs stored on the telescope (newest first) |
 | `tonight [LAT LON] [--now] [--min-grade G] [--limit N]` | Peak altitudes over tonight's dark window with a green/orange/red visibility dot (`--now` for a snapshot) |
 | `forecast [LAT LON]` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
-| `info OBJECT` | Full catalog detail (name, description, magnitude, …) for an object |
+| `info OBJECT` | The app's object card: type, constellation, magnitude, real size, distance, discovery, recommended time, description + trivia |
 | `observe TARGET` / `observe --ra … --de …` | Slew to a catalog object (`M42`, `Jupiter`) or manual coordinates |
 | `autoinit [LAT LON] [--skip-autofocus]` | Initialise / align at a location |
 | `stop` / `park` / `shutdown` | Stop running op (plan or observation) / park / power off |

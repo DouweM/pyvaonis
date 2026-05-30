@@ -148,6 +148,16 @@ stream*, not the socket emit. Mirror this:
   `observe_object`. `algorithm=AUTO` (not DEEP_SKY), `brightZoneOffset` omitted for AUTO,
   `targetType=CATALOG|MANUAL`, `observationType=STANDARD`. Source: app `observation_rules.json` +
   `CatalogObservationRule.mergeRules`/`getStackingParams` + `ObservationLauncher` solar-vs-deep-sky.
+- Control can't be stolen: the firmware refuses `takeControl` while another device is master+connected
+  (silent `CONTROL_ERROR`; the app disables its take-control button then). `take_control` raises a
+  clear "release it on the other device" error on timeout. Our per-command flow (connect →
+  take_control → act → disconnect) releases control on exit (and the socket close also frees it);
+  releasing does NOT stop a started observation/plan — the scope runs on autonomously.
+- Catalog (`tools/extract_catalog.py`) now also bundles the app's object-card data: distance/unit,
+  realSize/unit, discoveredBy/In, shortTitle, resolved categoryLabel + constellationName, and the
+  per-object `trivia` fun-facts (from `objects_<id>_trivia`). Surfaced in `stellina info` (a card),
+  `tonight` (recommended minutes + visibility dot), `CatalogObject.summary()`, and HA select
+  suggestions. `duration` = recommended observation minutes (0 ⇒ none, e.g. planets).
 - `set_multi_light` now also sends the two non-nullable SettingsBody fields with firmware defaults
   (`buttonBrightness=MEDIUM`, `algoHdrBackground=RECOMMENDED`) when status omits them.
 - Native plan body = `PlanBody`/`PlanTargetBody` (Moshi `PlanMyNightBody`): per-target

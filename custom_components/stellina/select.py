@@ -65,10 +65,12 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
                 "name": v.obj.display_name,
                 "altitude": round(v.altitude, 1),
                 "visibility": visibility_rating(v.altitude),  # good / poor / not_visible (app's color)
+                "recommended_minutes": v.obj.duration or None,
                 "grade": v.obj.grade,
                 "magnitude": v.obj.magnitude,
-                "constellation": v.obj.constellation,
-                "category": v.obj.category,
+                "constellation": v.obj.constellation_name or v.obj.constellation,
+                "category": v.obj.category_label or v.obj.category,
+                "distance": v.obj.distance_display,
                 "is_solar": v.obj.is_solar,
                 "description": v.obj.description,
             }

@@ -26,6 +26,8 @@ KEEP = [
     "ra", "de", "magnitude", "grade", "duration", "gain", "exposure", "orientation", "size",
     "histogramEnabled", "histogramLow", "histogramMedium", "histogramHigh",
     "backgroundEnabled", "backgroundPolyorder",
+    # informational "object card" fields the app shows
+    "distance", "distanceUnit", "realSize", "realSizeUnit", "discoveredBy", "discoveredIn",
 ]  # fmt: skip
 
 OUT = Path(__file__).resolve().parent.parent / "pystellina" / "data" / "catalog.json"
@@ -33,7 +35,20 @@ OUT = Path(__file__).resolve().parent.parent / "pystellina" / "data" / "catalog.
 
 def _unescape(s: str) -> str:
     s = s.replace("\\'", "'").replace('\\"', '"').replace("\\n", "\n").replace("\\@", "@")
-    return html.unescape(s).strip()
+    s = html.unescape(s).strip()
+    if len(s) >= 2 and s[0] == '"' and s[-1] == '"':  # apktool keeps Android's whitespace-quoting
+        s = s[1:-1].strip()
+    return s
+
+
+def _category_label(category: str, pairs: dict[str, str]) -> str | None:
+    """Resolve a category like 'galaxy-spiral' to its app label ('Spiral galaxy')."""
+    base = "categories_" + category.replace("-", "_")
+    label = pairs.get(base + "_fullTitle") or pairs.get(base + "_title")
+    if label is None:
+        return None
+    label = _unescape(label)
+    return label[:1].upper() + label[1:] if label else None
 
 
 def _merge_names(objects: list[dict], strings_xml: Path) -> tuple[int, int]:
@@ -48,6 +63,16 @@ def _merge_names(objects: list[dict], strings_xml: Path) -> tuple[int, int]:
         if (description := pairs.get(key + "_description")) is not None:
             o["description"] = _unescape(description)
             desc += 1
+        if (short := pairs.get(key + "_shortTitle")) is not None:
+            o["shortTitle"] = _unescape(short)
+        if (trivia := pairs.get(key + "_trivia")) is not None:
+            o["trivia"] = _unescape(trivia)
+        if o.get("category") and (label := _category_label(o["category"], pairs)) is not None:
+            o["categoryLabel"] = label
+        if o.get("constellation"):
+            full = pairs.get("constellations_" + o["constellation"] + "_title")
+            if full is not None:
+                o["constellationName"] = _unescape(full)
     return named, desc
 
 

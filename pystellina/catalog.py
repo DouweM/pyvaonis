@@ -67,6 +67,14 @@ class CatalogObject(BaseModel):
     size: float | None = None
     distance: float | None = None
     distance_unit: str | None = None
+    real_size: float | None = None
+    real_size_unit: str | None = None
+    discovered_by: str | None = None
+    discovered_in: str | None = None
+    trivia: str | None = None
+    short_title: str | None = None
+    category_label: str | None = None
+    constellation_name: str | None = None
     id_messier: str | None = None
     id_ngc: str | None = None
     id_ic: str | None = None
@@ -77,6 +85,13 @@ class CatalogObject(BaseModel):
             ("idNgc", "id_ngc"),
             ("idIc", "id_ic"),
             ("distanceUnit", "distance_unit"),
+            ("realSize", "real_size"),
+            ("realSizeUnit", "real_size_unit"),
+            ("discoveredBy", "discovered_by"),
+            ("discoveredIn", "discovered_in"),
+            ("shortTitle", "short_title"),
+            ("categoryLabel", "category_label"),
+            ("constellationName", "constellation_name"),
         ):
             if src in data:
                 data.setdefault(dst, data[src])
@@ -182,21 +197,53 @@ class CatalogObject(BaseModel):
             **common,
         )
 
+    @staticmethod
+    def _clean(value: Any) -> Any:
+        """Drop the app's sentinel non-values (``N/A`` / ``?``)."""
+        return None if isinstance(value, str) and value.strip() in ("N/A", "?", "") else value
+
+    @property
+    def distance_display(self) -> str | None:
+        """e.g. '50,000,000 ly' (None when unknown)."""
+        dist, unit = self._clean(self.distance), self._clean(self.distance_unit)
+        return f"{dist:,.0f} {unit}" if dist is not None and unit else None
+
+    @property
+    def real_size_display(self) -> str | None:
+        """e.g. '105,000 ly' (None when unknown)."""
+        size, unit = self._clean(self.real_size), self._clean(self.real_size_unit)
+        return f"{size:,.0f} {unit}" if size is not None and unit else None
+
+    @property
+    def discovery_display(self) -> str | None:
+        """e.g. 'Pierre Méchain, 1781' (None when unknown)."""
+        by, when = self._clean(self.discovered_by), self._clean(self.discovered_in)
+        return ", ".join(str(x) for x in (by, when) if x) or None if (by or when) else None
+
+    @property
+    def trivia_facts(self) -> list[str]:
+        """The app's per-object fun facts, as a clean list (its '- ' bullet lines)."""
+        if not self.trivia:
+            return []
+        return [ln.lstrip("- ").strip() for ln in self.trivia.splitlines() if ln.strip()]
+
     def summary(self) -> dict[str, Any]:
         """A compact, human-facing description for CLI/API/HA attributes."""
         return {
             "id": self.id,
             "name": self.display_name,
-            "designation": self.designation,
-            "constellation": self.constellation,
-            "category": self.category,
+            "designation": self.designation or self.short_title,
+            "constellation": self.constellation_name or self.constellation,
+            "category": self.category_label or self.category,
             "magnitude": self.magnitude,
             "grade": self.grade,
-            "distance": self.distance,
-            "distance_unit": self.distance_unit,
-            "recommended_minutes": self.duration,
+            "distance": self.distance_display,
+            "real_size": self.real_size_display,
+            "discovery": self.discovery_display,
+            "recommended_minutes": self.duration or None,
             "is_solar": self.is_solar,
             "description": self.description,
+            "trivia": self.trivia_facts,
         }
 
 

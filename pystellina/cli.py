@@ -361,10 +361,11 @@ def tonight(
         for v in rows:
             mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
             flag = "up now " if v.up_now else "rises  "
+            rec = f"{v.obj.duration}min" if v.obj.duration else ""
             typer.echo(
                 f"{_vis_dot(v.peak_altitude)} {v.obj.display_name:<22} "
                 f"peak {v.peak_altitude:5.1f}deg @ {_local(v.peak_time)} "
-                f"{flag} grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
+                f"{flag} {rec:>6}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
             )
         if not rows:
             typer.echo("no dark window tonight, or nothing clears the altitude filter")
@@ -380,9 +381,10 @@ def tonight(
     )
     for v in rows:
         mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
+        rec = f"{v.obj.duration}min" if v.obj.duration else ""
         typer.echo(
             f"{_vis_dot(v.altitude)} {v.obj.display_name:<22} alt {v.altitude:5.1f}deg  "
-            f"grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
+            f"{rec:>6}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
         )
     if not rows:
         typer.echo(
@@ -418,17 +420,43 @@ def forecast(
 
 
 @app.command(rich_help_panel=PANEL_PLAN)
-def info(object_id: str) -> None:
-    """Show full catalog detail for an object (offline)."""
+def info(
+    object_id: str, json_out: bool = typer.Option(False, "--json", help="raw JSON summary")
+) -> None:
+    """Show full catalog detail for an object (offline) — the app's object-card data."""
     from .catalog import get_object
 
     obj = get_object(object_id)
     if obj is None:
         typer.echo(f"unknown object: {object_id!r}")
         raise typer.Exit(1)
-    _print(obj.summary())
+    if json_out:
+        _print(obj.summary())
+        return
+
+    title = obj.display_name
+    if obj.designation and obj.designation != title:
+        title += f" ({obj.designation})"
+    typer.secho(title, fg=typer.colors.CYAN, bold=True)
+    rows = [
+        ("Type", obj.category_label or obj.category),
+        ("Constellation", obj.constellation_name or obj.constellation),
+        ("Magnitude", obj.magnitude),
+        ("Apparent size", obj.size),
+        ("Real size", obj.real_size_display),
+        ("Distance", obj.distance_display),
+        ("Discovery", obj.discovery_display),
+        ("Recommended", f"{obj.duration} min" if obj.duration else None),
+    ]
+    for label, value in rows:
+        if value is not None:
+            typer.echo(f"  {label + ':':<14} {value}")
     if obj.description:
         typer.echo("\n" + obj.description)
+    if obj.trivia_facts:
+        typer.secho("\nDid you know?", bold=True)
+        for fact in obj.trivia_facts:
+            typer.echo(f"  • {fact}")
 
 
 @app.command(rich_help_panel=PANEL_LIVE)
