@@ -28,6 +28,22 @@ from .models import ObservationBody
 
 _DATA = resources.files(__package__) / "data" / "catalog.json"
 
+# Deep-sky object types that live-stack (the app's observation_rules `stackingEnabled` set); their
+# per-type histogramLow default when the catalog entry doesn't carry an explicit one.
+_STACKING_TYPES = {"OP", "ODC", "ODE", "ODOC"}
+_HISTOGRAM_LOW_BY_TYPE = {"OP": 0.0, "ODC": -0.75, "ODE": -1.0, "ODOC": -1.0}
+# Per-object solar gain/exposureMicroSec for Stellina (observation_rules.json objectId overrides);
+# the catalog only carries the generic planet rule, so we apply the app's per-planet values here.
+_SOLAR_PARAMS_STELLINA: dict[str, tuple[int, int]] = {
+    "moon": (50, 40000),
+    "venus": (50, 40000),
+    "jupiter": (16, 10000),
+    "saturn": (100, 100000),
+    "mars": (16, 10000),
+    "uranus": (200, 500000),
+    "neptune": (270, 2000000),
+}
+
 
 class CatalogObject(BaseModel):
     """A catalog entry. Imaging/extra fields are optional and kept if present."""
@@ -115,20 +131,55 @@ class CatalogObject(BaseModel):
         return astro.equatorial_altitude(ra, dec, latitude, longitude, when or datetime.now(UTC))
 
     def to_observation(self, when: datetime | None = None) -> ObservationBody:
-        """Build a start-observation body from the recommended settings.
+        """Build a start-observation body the firmware accepts, mirroring the app's derivation.
 
-        For solar objects the current ephemeris RA/Dec is resolved (requires ``ephem``).
+        Live-stacking (and the six histogram/background params the firmware then requires) is enabled
+        only for deep-sky types (OP/ODC/ODE/ODOC); stars send ``doStacking=false`` and omit those
+        params. Per-object histogram values from the catalog are used when present, else the app's
+        per-type rule defaults. For solar objects the firmware resolves the coordinates itself, so —
+        exactly as the app does — we send no RA/Dec/rot (the near-Sun safety guard runs in
+        :meth:`StellinaClient.observe_object`).
         """
+        if self.is_solar:  # planets/Moon/Sun: objectId + camera params, no coordinates, no stacking
+            gain, exposure = _SOLAR_PARAMS_STELLINA.get(self.id.lower(), (self.gain, self.exposure))
+            return ObservationBody(
+                object_id=self.id,
+                object_name=self.display_name,
+                object_type=self.type or "",
+                target_type="CATALOG",
+                gain=gain,
+                exposure_micro_sec=exposure,
+                do_stacking=False,
+            )
+
         ra, dec = self.coordinates(when)
+        common: dict[str, Any] = {
+            "object_id": self.id,
+            "object_name": self.display_name,
+            "object_type": self.type or "",
+            "target_type": "CATALOG",
+            "ra": ra,
+            "de": dec,
+            "rot": self.orientation,
+            "gain": self.gain,
+            "exposure_micro_sec": self.exposure,
+        }
+        if self.type not in _STACKING_TYPES:  # stars, untyped → single frames
+            return ObservationBody(do_stacking=False, **common)
+
+        extra = self.model_extra or {}
+        low = extra.get("histogramLow")
+        if low is None:
+            low = _HISTOGRAM_LOW_BY_TYPE.get(self.type, 0.0)
         return ObservationBody(
-            object_id=self.id,
-            object_name=self.display_name,
-            object_type=self.type or "",
-            ra=ra,
-            de=dec,
-            rot=self.orientation,
-            gain=self.gain,
-            exposure_micro_sec=self.exposure,
+            do_stacking=True,
+            histogram_enabled=bool(extra.get("histogramEnabled", True)),
+            histogram_low=float(low),
+            histogram_medium=float(extra.get("histogramMedium", 5)),
+            histogram_high=float(extra.get("histogramHigh", 0)),
+            background_enabled=bool(extra.get("backgroundEnabled", True)),
+            background_polyorder=float(extra.get("backgroundPolyorder", 2)),
+            **common,
         )
 
     def summary(self) -> dict[str, Any]:

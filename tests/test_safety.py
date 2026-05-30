@@ -153,7 +153,12 @@ async def test_in_observation_actions_require_control_and_build_bodies() -> None
 
     await c.set_multi_light(True)
     assert seen["endpoint"] == "app/setSettings"
-    assert seen["body"] == {"enableHdrBackground": True}  # no other settings in test status
+    # no other settings in the test status, plus the two non-nullable SettingsBody defaults
+    assert seen["body"] == {
+        "enableHdrBackground": True,
+        "buttonBrightness": "MEDIUM",
+        "algoHdrBackground": "RECOMMENDED",
+    }
 
     await c.enable_multi_night()
     assert seen["endpoint"] == "capture/setToBeResumable"
@@ -175,4 +180,4 @@ async def test_observe_allows_far_from_sun_and_sends_full_body() -> None:
     )
     assert captured["endpoint"] == "general/startObservation"
     assert captured["body"]["observationType"] == "STANDARD"  # app-required field is sent
-    assert captured["body"]["algorithm"] == "DEEP_SKY"
+    assert captured["body"]["algorithm"] == "AUTO"  # the app sends AUTO for non-manual observations

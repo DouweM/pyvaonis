@@ -102,17 +102,30 @@ class ObservationBody(BaseModel):
     object_id: str = Field(default="", serialization_alias="objectId")
     object_name: str = Field(default="", serialization_alias="objectName")
     object_type: str = Field(default="", serialization_alias="objectType")
+    target_type: str | None = Field(
+        default=None, serialization_alias="targetType"
+    )  # CATALOG|MANUAL
     ra: float | None = None
     de: float | None = None
     rot: float | None = None
     gain: int | None = None
     exposure_micro_sec: int | None = Field(default=None, serialization_alias="exposureMicroSec")
-    do_stacking: bool = Field(default=True, serialization_alias="doStacking")
-    # Fields the app's getStartObservationParams ALWAYS sends for a standard deep-sky target
-    # (decompiled defaults). Kept overridable; firmware may rely on these for correct pointing.
+    # The firmware requires the six histogram/background params *iff* doStacking is true (and rejects
+    # the call if any is missing); for non-stacking targets (planets/Moon/stars) they must be omitted.
+    do_stacking: bool = Field(default=False, serialization_alias="doStacking")
+    histogram_enabled: bool | None = Field(default=None, serialization_alias="histogramEnabled")
+    histogram_low: float | None = Field(default=None, serialization_alias="histogramLow")
+    histogram_medium: float | None = Field(default=None, serialization_alias="histogramMedium")
+    histogram_high: float | None = Field(default=None, serialization_alias="histogramHigh")
+    background_enabled: bool | None = Field(default=None, serialization_alias="backgroundEnabled")
+    background_polyorder: float | None = Field(
+        default=None, serialization_alias="backgroundPolyorder"
+    )
+    # The app sends STANDARD + AUTO/AUTO for catalog targets; brightZoneOffset is only included for
+    # DEEP_SKY* algorithms, so it stays None (omitted) for AUTO.
     observation_type: str = Field(default="STANDARD", serialization_alias="observationType")
-    algorithm: str = Field(default="DEEP_SKY", serialization_alias="algorithm")
-    bright_zone_offset: str = Field(default="NEAR", serialization_alias="brightZoneOffset")
+    algorithm: str = Field(default="AUTO", serialization_alias="algorithm")
+    bright_zone_offset: str | None = Field(default=None, serialization_alias="brightZoneOffset")
 
     def to_payload(self) -> dict[str, Any]:
         """JSON body with ``None`` fields dropped."""

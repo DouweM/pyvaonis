@@ -138,6 +138,18 @@ stream*, not the socket emit. Mirror this:
   `stop` stops a plan if one runs else the observation; commands grouped into --help panels; location
   from arg→env(`STELLINA_LAT/LON`)→scope (shows observatory name); host `STELLINA_HOST`; times local;
   expected errors print one line (`--debug` for trace). `image` defaults to the fast static fetch.
+- **startObservation params are rule-derived (to-the-letter with the app), or the firmware 500s**
+  (`CHECKPARAMS` for missing histogram*/background*). `catalog.to_observation`: deep-sky types
+  {OP,ODC,ODE,ODOC} → `doStacking=true` + the six histogram/background params (per-object from the
+  catalog, else per-type rule defaults: histogramLow OP 0/ODC -0.75/ODE -1/ODOC -1, medium 5, high 0,
+  backgroundEnabled true, backgroundPolyorder 2). Non-stacking (stars/untyped) → `doStacking=false`,
+  omit the six. **Solar** (planets/Moon/Sun) → `doStacking=false`, **no ra/de/rot** (firmware
+  resolves), per-planet gain/exp overrides (`_SOLAR_PARAMS_STELLINA`); near-Sun guard moved to
+  `observe_object`. `algorithm=AUTO` (not DEEP_SKY), `brightZoneOffset` omitted for AUTO,
+  `targetType=CATALOG|MANUAL`, `observationType=STANDARD`. Source: app `observation_rules.json` +
+  `CatalogObservationRule.mergeRules`/`getStackingParams` + `ObservationLauncher` solar-vs-deep-sky.
+- `set_multi_light` now also sends the two non-nullable SettingsBody fields with firmware defaults
+  (`buttonBrightness=MEDIUM`, `algoHdrBackground=RECOMMENDED`) when status omits them.
 - Native plan body = `PlanBody`/`PlanTargetBody` (Moshi `PlanMyNightBody`): per-target
   `startTime`/`endTime` epoch-ms windows + `params` (a full `ObservationBody`); `build_plan` lays
   them back-to-back from `target:minutes`. Plan status is `currentOperation.type=="PLAN"` with a

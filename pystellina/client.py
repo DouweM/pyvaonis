@@ -487,6 +487,16 @@ class StellinaClient:
             raise StellinaCommandError(f"unknown catalog object: {object_id!r}")
         try:
             observation = obj.to_observation()  # resolves ephemeris for solar objects
+            # Solar bodies carry no RA/Dec on the wire (the app omits them), so the near-Sun guard
+            # that start_observation runs on ra/de can't fire — check here from the resolved coords.
+            if obj.is_solar and not allow_solar:
+                sep = astro.separation_from_sun(*obj.coordinates())
+                if sep < const.SOLAR_EXCLUSION_DEG:
+                    raise StellinaCommandError(
+                        f"{obj.display_name} is {sep:.1f}° from the Sun (<{const.SOLAR_EXCLUSION_DEG}°); "
+                        "refused. Imaging near the Sun without the Vaonis solar filter destroys the "
+                        "sensor. Pass allow_solar=True only if the filter is installed."
+                    )
         except RuntimeError as err:  # ephem not installed for a solar object
             raise StellinaCommandError(str(err)) from err
         return await self.start_observation(observation, allow_solar=allow_solar, replace=replace)
@@ -618,6 +628,9 @@ class StellinaClient:
                 "buttonBrightness")  # fmt: skip
         body = {k: current[k] for k in keep if k in current}
         body["enableHdrBackground"] = enabled
+        # These two are non-nullable in SettingsBody — supply the firmware defaults if status omits them.
+        body.setdefault("buttonBrightness", "MEDIUM")
+        body.setdefault("algoHdrBackground", "RECOMMENDED")
         return await self.post(const.Endpoint.SET_SETTINGS, body)
 
     async def enable_multi_night(self) -> dict[str, Any]:

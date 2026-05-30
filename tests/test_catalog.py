@@ -60,24 +60,38 @@ def test_objects_have_names_and_descriptions() -> None:
     assert m42.summary()["name"] == "Orion Nebula"
 
 
-def test_to_observation_uses_recommended_settings() -> None:
-    m42 = get_object("M42")
+def test_to_observation_deep_sky_sends_stacking_params() -> None:
+    m42 = get_object("M42")  # type ODE → stacks
     assert m42 is not None
     payload = m42.to_observation().to_payload()
     assert payload["objectId"] == "M42"
     assert payload["objectName"] == "Orion Nebula"
+    assert payload["targetType"] == "CATALOG"
     assert payload["ra"] == m42.ra
-    assert payload["gain"] == m42.gain  # from the catalog's recommended settings
+    assert payload["gain"] == m42.gain
+    # stacking on → the six histogram/background params the firmware requires are all present
+    assert payload["doStacking"] is True
+    for key in (
+        "histogramEnabled",
+        "histogramLow",
+        "histogramMedium",
+        "histogramHigh",
+        "backgroundEnabled",
+        "backgroundPolyorder",
+    ):
+        assert key in payload, key
 
 
-def test_solar_object_resolves_via_ephemeris() -> None:
-    jupiter = get_object("Jupiter")
+def test_to_observation_solar_omits_coords_and_stacking() -> None:
+    jupiter = get_object("Jupiter")  # solar → firmware resolves coords; no stacking
     assert jupiter is not None
     assert jupiter.is_solar
-    assert not jupiter.has_coordinates  # no stored coords
-    payload = jupiter.to_observation().to_payload()  # computed via ephem (dev dep)
+    payload = jupiter.to_observation().to_payload()
     assert payload["objectName"] == "Jupiter"
-    assert 0.0 <= payload["ra"] < 360.0
+    assert payload["doStacking"] is False
+    assert "ra" not in payload and "de" not in payload  # exactly as the app: omitted for solar
+    assert "histogramLow" not in payload
+    assert payload["gain"] == 16 and payload["exposureMicroSec"] == 10000  # per-planet override
 
 
 def test_require_dark_returns_nothing_in_daylight() -> None:

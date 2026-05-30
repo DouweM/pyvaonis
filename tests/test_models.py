@@ -35,7 +35,10 @@ def test_status_without_challenge_cannot_authenticate() -> None:
 def test_observation_body_drops_none_and_aliases() -> None:
     payload = ObservationBody(object_name="M42", ra=83.82, de=-5.39).to_payload()
     assert payload["objectName"] == "M42"
-    assert payload["doStacking"] is True
+    assert payload["doStacking"] is False  # no stacking params supplied → single frames
+    assert payload["algorithm"] == "AUTO"
     assert payload["ra"] == 83.82
     assert "gain" not in payload  # None dropped
     assert "exposureMicroSec" not in payload
+    assert "brightZoneOffset" not in payload  # omitted for AUTO
+    assert "histogramLow" not in payload  # omitted when not stacking

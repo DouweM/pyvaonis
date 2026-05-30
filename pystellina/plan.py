@@ -74,10 +74,14 @@ def build_plan(
         when = datetime.fromtimestamp(cursor / 1000, UTC)
         try:
             params = obj.to_observation(when=when)
+            # Solar bodies carry no ra/de, so resolve coords from the object for the near-Sun guard.
+            check_ra, check_de = params.ra, params.de
+            if check_ra is None and obj.is_solar:
+                check_ra, check_de = obj.coordinates(when)
         except RuntimeError as err:  # ephem missing for a solar object
             raise ValueError(str(err)) from err
-        if not allow_solar and params.ra is not None and params.de is not None:
-            sep = astro.separation_from_sun(params.ra, params.de, when)
+        if not allow_solar and check_ra is not None and check_de is not None:
+            sep = astro.separation_from_sun(check_ra, check_de, when)
             if sep < const.SOLAR_EXCLUSION_DEG:
                 raise ValueError(
                     f"{obj.display_name} is {sep:.1f}° from the Sun at its window "

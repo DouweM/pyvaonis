@@ -286,11 +286,13 @@ def observe(
     elif ra is not None and de is not None:
         body = ObservationBody(
             object_name=object_name,
+            target_type="MANUAL",
             ra=ra,
             de=de,
             gain=gain,
             exposure_micro_sec=exposure_us,
-            do_stacking=not no_stacking,
+            # Manual targets have no catalog type → no histogram params to send, so single frames.
+            do_stacking=False,
         )
 
         async def _go(s: StellinaClient) -> Any:
