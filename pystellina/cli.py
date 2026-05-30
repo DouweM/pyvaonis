@@ -301,10 +301,18 @@ def observing(ip: str = const.DEFAULT_IP) -> None:
     """Show the current observation (target, step, stacking), read-only."""
 
     async def _go(scope: StellinaClient) -> Any:
-        return await _ret(scope.current_observation())
+        return await _ret((scope.current_observation(), scope.plan_progress()))
 
-    obs = _run(_with_client(ip, False, _go))
-    _print(obs.model_dump() if obs is not None else {"observing": False})
+    obs, plan = _run(_with_client(ip, False, _go))
+    if obs is not None:
+        out = obs.model_dump()
+        if plan is not None:
+            out["plan"] = plan.model_dump()
+        _print(out)
+    elif plan is not None:
+        _print({"plan": plan.model_dump()})
+    else:
+        _print({"observing": False})
 
 
 def _slugify(name: str) -> str:
@@ -318,27 +326,36 @@ def image(
     out: str = typer.Option(
         "", "--out", "-o", help="output path; default <object>_<frame>.jpg from the live frame"
     ),
+    rendered: bool = typer.Option(
+        False,
+        "--rendered/--fast",
+        help="force the slow on-demand render; default --fast grabs the written frame file",
+    ),
     timeout: float = typer.Option(
-        120.0, "--timeout", help="seconds (the firmware renders the JPEG on demand — it is slow)"
+        120.0, "--timeout", help="seconds (only the slow --rendered path)"
     ),
     ip: str = const.DEFAULT_IP,
 ) -> None:
     """Download the current live-stacked frame (read-only; SAFE during an observation).
 
-    Default filename is the current object + frame index (e.g. M104_0042.jpg), so repeated runs
-    don't overwrite each other. NB: the scope renders this JPEG on demand, so a fetch can take tens
-    of seconds while it is also stacking — hence the generous --timeout. For instant access to
-    already-written frames, browse the FTP library (`stellina library`).
+    The latest stacked frame is already written to the scope's disk, so by default (`--fast`) we
+    download that file directly — instant. `--rendered` instead asks the firmware to re-render the
+    JPEG on demand (what the app does), which is slow while it is also stacking. Default filename is
+    the current object + frame index (e.g. M104_0042.jpg), so repeated runs don't overwrite.
     """
 
     async def _go(scope: StellinaClient) -> Any:
-        scope.request_timeout = timeout
         img = scope.current_image()
         obs = scope.current_observation()
-        data = await scope.fetch_image(img) if img else None
+        if img is None:
+            return None, "stellina.jpg"
+        if rendered:
+            scope.request_timeout = timeout
+            data = await scope.fetch_image(img)  # on-demand render (slow)
+        else:
+            data = await scope.download_file(img.ftp_path)  # static file over FTP (fast)
         name = obs.object_name if obs and obs.object_name else "stellina"
-        default = f"{_slugify(name)}_{img.index:04d}.jpg" if img else "stellina.jpg"
-        return data, default
+        return data, f"{_slugify(name)}_{img.index:04d}.jpg"
 
     data, default = _run(_with_client(ip, False, _go))
     if not data:
@@ -407,44 +424,59 @@ def download(path: str, out: str = "", ip: str = const.DEFAULT_IP) -> None:
 
 
 @app.command()
-def sequence(
+def plan(
     targets: list[str],
     lat: float,
     lon: float,
+    name: str = "pystellina plan",
+    wait_for_dark: bool = typer.Option(
+        False, "--wait-for-dark", help="schedule the plan to start at the next dusk (Sun < -10°)"
+    ),
+    start_in: float = typer.Option(0.0, "--start-in", help="minutes from now to start (overrides)"),
     ip: str = const.DEFAULT_IP,
-    require_dark: bool = True,
-    wait_for_dark: bool = False,
-    park: bool = True,
-    shutdown: bool = False,
 ) -> None:
-    """Run an observing plan, e.g. `sequence M42:30 M51:20 Jupiter:10 --lat 52.4 --lon 4.9`."""
-    from .sequence import SequenceEvent
-    from .sequence import SequenceItem
-    from .sequence import run_sequence
+    """Start the telescope's NATIVE autonomous plan, e.g.
+    `plan M42:30 M51:20 Jupiter:10 19.4 -99.2`.
 
-    items = [SequenceItem.parse(t) for t in targets]
+    [IDLE ONLY.] Uploads one Plan-My-Night (`planner/startPlan`) and returns: the firmware then
+    auto-initialises and runs every target on schedule by itself, so you can disconnect. Watch it
+    with `stellina observing` / `stellina status`; cancel with `stellina stop-plan`. NB: the native
+    plan parks at the end on its own but has no power-off step — leave a session connected if you
+    want `shutdown`.
+    """
+    from datetime import UTC
+    from datetime import datetime
+    from datetime import timedelta
 
-    def on_event(ev: SequenceEvent) -> None:
-        label = ev.item.target if ev.item else ""
-        typer.echo(
-            f"[{ev.kind}] {label} {json.dumps(ev.detail, default=str) if ev.detail else ''}".rstrip()
+    from .astro import observing_window
+    from .plan import PlanItem
+
+    items = [PlanItem.parse(t) for t in targets]
+
+    start_time: datetime | None = None
+    if start_in:
+        start_time = datetime.now(UTC) + timedelta(minutes=start_in)
+    elif wait_for_dark:
+        window = observing_window(lat, lon)
+        if window is None:
+            typer.echo("no dark window in the next 24h; refusing to schedule")
+            raise typer.Exit(1)
+        start_time = max(window[0], datetime.now(UTC))
+
+    async def _go(scope: StellinaClient) -> Any:
+        return await scope.start_plan(
+            items, name=name, latitude=lat, longitude=lon, start_time=start_time
         )
 
-    async def _go() -> None:
-        async with StellinaClient(ip=ip) as scope:
-            await run_sequence(
-                scope,
-                items,
-                latitude=lat,
-                longitude=lon,
-                require_dark=require_dark,
-                wait_for_dark=wait_for_dark,
-                park_at_end=park,
-                shutdown_at_end=shutdown,
-                on_event=on_event,
-            )
+    when = f" starting {start_time:%H:%M}Z" if start_time else " now"
+    typer.echo(f"uploading plan {name!r} ({len(items)} targets){when}…")
+    _print(_run(_with_client(ip, True, _go)))
 
-    _run(_go())
+
+@app.command()
+def stop_plan(ip: str = const.DEFAULT_IP) -> None:
+    """Cancel the running native plan (planner/stopPlan)."""
+    _print(_run(_with_client(ip, True, lambda s: s.stop_plan())))
 
 
 @app.command()

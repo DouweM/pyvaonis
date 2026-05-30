@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import Final
 
 DEFAULT_IP: Final = "10.0.0.1"
+# Echoed into request bodies that carry it (e.g. planner/startPlan appVersion); mirrors the app.
+APP_VERSION: Final = "1.38.10"
 HTTP_PORT: Final = 8082
 SOCKET_PORT: Final = 8083
 SOCKET_PATH: Final = "/socket.io"

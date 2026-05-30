@@ -25,9 +25,10 @@ export_capture:
 run_plan:
   name: Run observing plan
   description: >-
-    Run an unattended plan in the background: observe each target for its minutes, then park
-    (and optionally shut down). Waits for darkness if asked. Gate on weather in the automation
-    that calls this (e.g. condition on weather.microclimate), not here.
+    Start the telescope's native Plan-My-Night: it auto-initialises and observes each target for
+    its minutes, advancing on schedule by itself (it keeps running even if Home Assistant
+    disconnects), then parks. There is no power-off step. Gate on weather in the automation that
+    calls this (e.g. condition on weather.microclimate), not here.
   fields:
     targets:
       name: Targets
@@ -38,30 +39,14 @@ run_plan:
         object:
     wait_for_dark:
       name: Wait for dark
-      description: Wait until the Sun is below -10° before starting.
+      description: Schedule the plan to start at the next dusk (Sun below -10°) instead of now.
       default: true
-      selector:
-        boolean:
-    require_dark:
-      name: Require dark
-      description: Stop the plan once the Sun rises above -10°.
-      default: true
-      selector:
-        boolean:
-    park:
-      name: Park at end
-      default: true
-      selector:
-        boolean:
-    shutdown:
-      name: Shut down at end
-      default: false
       selector:
         boolean:
 
 stop_plan:
   name: Stop observing plan
-  description: Cancel a running plan and stop the current observation.
+  description: Cancel the running native plan (planner/stopPlan).
 
 observe:
   name: Observe object

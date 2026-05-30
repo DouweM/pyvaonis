@@ -99,7 +99,7 @@ method body/path for them in this decompile; they are noted at the end of the ta
 |--------|------|--------------|----------|------|------------|
 | POST | `capture/exportImageTiff` | `TiffBody { captureId:String }` | `TiffResponse { result:TiffData }` where `TiffData { savedOnUsbStorage:Boolean, stackingCount:Integer }` (+ `url` returned in result) | STATE | `export_url(fmt="tiff")` / `export_capture()` |
 | POST | `capture/exportImageJpegXl` | `@Query("captureId") String` (no body) | `CaptureJxlResponse { result:JXLData }` where `JXLData { image:StellinaCaptureImage, inAppJson:String, url:String }` | STATE | `export_url(fmt="jxl")` / `export_capture()` |
-| POST | `capture/setToBeResumable` | — | OrderResponse | STATE | `save_observation()` |
+| POST | `capture/setToBeResumable` | — | OrderResponse | STATE | `enable_multi_night()` |
 
 > pystellina treats `exportImageJpegXl` as a GET with `?captureId=` (`export_url`); the decompiled
 > interface annotates it `@POST` with a `@Query` param. Both forms reach the same handler in practice.
@@ -123,8 +123,8 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 | Method | Path | Request body | Response | Risk | pystellina |
 |--------|------|--------------|----------|------|------------|
-| POST | `planner/startPlan` | `PlanMyNightBody { planId:String, planVersion:String, planName:String, targets:List<PlanMyNightTargetBody>, latitude:double, longitude:double, observatoryId:String, observatoryName:String, userId:int, deviceId:String, appVersion:String }` — each `PlanMyNightTargetBody { startTime:long, endTime:long, storeId:String, params:StartObservationBody }` | OrderResponse | PHYSICAL/STATE | — (const `START_PLAN`, no helper) |
-| POST | `planner/stopPlan` | — | OrderResponse | STATE | — (const `STOP_PLAN`, no helper) |
+| POST | `planner/startPlan` | `PlanMyNightBody { planId:String, planVersion:String, planName:String, targets:List<PlanMyNightTargetBody>, latitude:double, longitude:double, observatoryId:String, observatoryName:String, userId:int, deviceId:String, appVersion:String }` — each `PlanMyNightTargetBody { startTime:long, endTime:long, storeId:String, params:StartObservationBody }` | OrderResponse | PHYSICAL/STATE | `start_plan()` (`PlanBody`/`PlanTargetBody`; `build_plan` lays out windows) |
+| POST | `planner/stopPlan` | — | OrderResponse | STATE | `stop_plan()` |
 | GET | `planner/getPlanObservation` | `@Query("observationId") String` | `PlanObservationResponse { result:StellinaObservationOperation, success:boolean }` | SAFE | — |
 
 ### playlist/ — observation playlists
@@ -339,8 +339,8 @@ guards above.
 
 **Notable UNIMPLEMENTED endpoints:**
 
-- **Planner:** `planner/startPlan` (const only), `planner/stopPlan` (const only),
-  `planner/getPlanObservation`.
+- **Planner:** `planner/startPlan` + `planner/stopPlan` are **implemented** (`start_plan`/`stop_plan`);
+  `planner/getPlanObservation` (per-target detail GET) is not.
 - **Playlist:** `playlist/startPlaylist`, `playlist/stopPlaylist`.
 - **Expert mode:** `expertMode/startStorageAcquisition`, `expertMode/stopStorageAcquisition`.
 - **Sun mode:** `sun/startSunMode`, `sun/handleUserAction`, `sun/setUserParams`, `sun/changePov`,

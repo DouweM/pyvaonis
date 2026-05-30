@@ -38,12 +38,12 @@ router's conntrack FTP helper. Details in `README.md` → "Wi-Fi bridge". (User 
 ## Repo layout
 ```
 pystellina/            const.py auth.py _eio3.py models.py client.py catalog.py astro.py
-                       observation.py sequence.py weather.py ftp.py cli.py  data/catalog.json
+                       observation.py plan.py weather.py ftp.py cli.py  data/catalog.json
 custom_components/stellina/  HACS integration (coordinator/entity/config_flow/sensor/binary_sensor/
                        button/select/camera/media_source/http + manifest/hacs/strings/services.yaml)
 tools/extract_catalog.py     regenerate data/catalog.json from an APK
-tests/                 pytest (auth, catalog, astro, observation, sequence, ftp, export, safety,
-                       weather, models, eio3)  — 53 tests
+tests/                 pytest (auth, catalog, astro, observation, plan, ftp, export, safety,
+                       weather, models, eio3)  — 59 tests
 docs/API.md            complete endpoint reference + pystellina coverage
 docs/STATUS.md         full status JSON schema (firmware 2.35.7)
 README.md PROTOCOL.md  usage / wire protocol
@@ -55,12 +55,18 @@ README.md PROTOCOL.md  usage / wire protocol
 `python tools/extract_catalog.py app.apk --strings apktool_out/res/values/strings.xml`.
 
 ## What's implemented vs not
-- **Implemented** (client + CLI): connect/status stream, take/release control, autoinit, observe
-  (catalog/manual), stop, park, shutdown, switch_frequency, **in-observation: adjust_framing,
-  restart_autofocus, set_multi_light, set_camera_params, save_observation**, full-res export
-  (tiff/jxl), FTP library, live image + recent images, sequences (`run_sequence`), catalog +
-  "tonight" visibility, weather verdict (Open-Meteo), darkness/observing window, ephemeris (planets/Moon).
-- **Not yet**: planner/playlist/expertMode/sun-mode, captureStore resume, getLogs/reports, mosaic.
+- **Implemented** (client + CLI): connect/status stream, take/release control (waits for the
+  status echo), autoinit, observe (catalog/manual, `replace=` stop-and-take-over), stop, park,
+  shutdown, switch_frequency, **in-observation: adjust_framing, restart_autofocus, set_multi_light,
+  set_camera_params, enable_multi_night (setToBeResumable)**, **native plan (`start_plan`/`stop_plan`/
+  `plan_progress`, `planner/startPlan`)**, full-res export (tiff/jxl), FTP library, live image
+  (`image` defaults to the fast static-file fetch; `--rendered` for on-demand) + recent images,
+  catalog + "tonight" visibility (`visible_now` + `visible_tonight` over the dark window), weather
+  verdict (Open-Meteo), darkness/observing window, ephemeris (planets/Moon).
+- **Not yet**: playlist (`playlist/startPlaylist`), expertMode raw acquisition, sun/eclipse mode,
+  captureStore resume (`startObservationFromStoredCapture`/`getObservation`/`deleteStoredCapture`),
+  logs/consume + reporter, mosaic (`StartObservationBody.mosaic`), darkManager. Bodies for all of
+  these are mapped in the dig notes; see `docs/API.md`.
 - **Safety-gated** (never auto-run): firmware upload (blocked), delete/reset (`allow_unsafe`),
   solar/sun-near (`allow_solar`). See `client._guard_endpoint`. Full map in `docs/API.md`.
 
@@ -82,8 +88,9 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Live view + controls + gallery from the scope. Data model in `PROTOCOL.md` → "Catalog & browsing".
   Step 1: re-extract catalog keeping `distance/realSize/discoveredBy` + bundle `catalog_object/*.png`
   (lowercased id, rotate 90°) + `constellations.json`.
-- HA: media-source over `/files`/FTP `/system/captures`; HA service/UI for sequences exists (`run_plan`).
-- Confirm planner/playlist/sun bodies if those features are wanted.
+- HA: media-source over `/files`/FTP `/system/captures`; `run_plan`/`stop_plan` now drive the native
+  Plan-My-Night (`client.start_plan`/`stop_plan`).
+- Next API surfaces (bodies mapped): captureStore resume, playlist, sun/eclipse, expert raw, mosaic.
 
 ## Control / observation ordering (mirrors the app — verified in decompiled source)
 The app gates every REST command on `connectedAsMaster`, which only flips true when a
@@ -97,14 +104,16 @@ stream*, not the socket emit. Mirror this:
   `start_observation`/`observe_object` default to that refusal; pass **`replace=True`** to stop a
   running *observation* and `_wait_idle()` (status shows `currentOperation` cleared) before starting
   the new target. A `stopObservation` POST returns before the op actually clears, hence the wait.
-  CLI `observe`/`observe-object` default `--replace` ON; `run_sequence` and the HA observe/select use it.
+  CLI `observe`/`observe-object` default `--replace` ON; the HA observe/select use it. A **native
+  plan** (`start_plan`) is separate: it is refused unless idle (no auto-replace) and the firmware
+  runs it autonomously (auto-init + scheduled targets), surviving disconnect.
 - App preconditions for startObservation (all enforced): not shuttingDown, connected,
   connectedAsMaster, not blocked, `currentOperation == null`, `initialized == true`.
 - **CLI is one control-session per process**: each `stellina <cmd>` connects → `take_control` →
   acts → `disconnect()` which **releases control**. So `stellina stop` then `stellina observe` are
   two separate take/release cycles (control drops between them; the phone could grab it back). For a
-  held multi-step session use ONE Python `async with StellinaClient()` block or the `sequence`
-  command (single session across all targets).
+  held multi-step session use ONE Python `async with StellinaClient()` block. (A native `plan` does
+  not need a held session at all — the firmware runs it.)
 
 ## Gotchas
 - It's EIO3, not python-socketio. Status event is `STATUS_UPDATED`; observation under `currentOperation`.
@@ -112,3 +121,10 @@ stream*, not the socket emit. Mirror this:
 - `app/setSettings` may replace rather than merge — `set_multi_light` echoes current settings to be safe.
 - `take_control` waits for the status echo; if you ever call it `wait=False`, don't issue a command
   in the same tick.
+- Live `image` is slow only via the on-demand render (`?androidImageIndex=&androidCaptureId=` makes
+  firmware re-encode the JPEG). The frame is already on disk, so `image` defaults to the static file
+  (`LiveImage.ftp_path` over FTP, or `static_url` = the bare path with no query). Same bytes, instant.
+- Native plan body = `PlanBody`/`PlanTargetBody` (Moshi `PlanMyNightBody`): per-target
+  `startTime`/`endTime` epoch-ms windows + `params` (a full `ObservationBody`); `build_plan` lays
+  them back-to-back from `target:minutes`. Plan status is `currentOperation.type=="PLAN"` with a
+  `state` + `targets[].storeState=="OBSERVING"` marking the live target.

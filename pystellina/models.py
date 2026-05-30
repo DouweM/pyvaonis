@@ -107,3 +107,64 @@ class ObservationBody(BaseModel):
     def to_payload(self) -> dict[str, Any]:
         """JSON body with ``None`` fields dropped."""
         return self.model_dump(by_alias=True, exclude_none=True)
+
+
+class PlanTargetBody(BaseModel):
+    """One scheduled target of a native plan (``PlanMyNightTargetBody``).
+
+    The firmware runs each target in its own ``[startTime, endTime]`` window (epoch ms), auto-
+    advancing when ``endTime`` passes. ``params`` is a full :class:`ObservationBody`; ``storeId``
+    resumes a stored (multi-night) capture instead of starting fresh.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    start_time: int = Field(serialization_alias="startTime")  # epoch ms
+    end_time: int = Field(serialization_alias="endTime")  # epoch ms
+    store_id: str | None = Field(default=None, serialization_alias="storeId")
+    params: ObservationBody | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"startTime": self.start_time, "endTime": self.end_time}
+        if self.store_id is not None:
+            body["storeId"] = self.store_id
+        if self.params is not None:
+            body["params"] = self.params.to_payload()
+        return body
+
+
+class PlanBody(BaseModel):
+    """Body for ``planner/startPlan`` (``PlanMyNightBody``) — the native "Plan My Night".
+
+    The firmware executes the whole plan autonomously (auto-init included), so it survives the
+    controller disconnecting — unlike client-driven looping.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    plan_id: str = Field(serialization_alias="planId")
+    plan_version: str = Field(serialization_alias="planVersion")
+    plan_name: str = Field(serialization_alias="planName")
+    targets: list[PlanTargetBody]
+    latitude: float
+    longitude: float
+    observatory_id: str = Field(default="", serialization_alias="observatoryId")
+    observatory_name: str = Field(default="pystellina", serialization_alias="observatoryName")
+    user_id: int = Field(default=0, serialization_alias="userId")
+    device_id: str = Field(serialization_alias="deviceId")
+    app_version: str = Field(serialization_alias="appVersion")
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "planId": self.plan_id,
+            "planVersion": self.plan_version,
+            "planName": self.plan_name,
+            "targets": [t.to_payload() for t in self.targets],
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "observatoryId": self.observatory_id,
+            "observatoryName": self.observatory_name,
+            "userId": self.user_id,
+            "deviceId": self.device_id,
+            "appVersion": self.app_version,
+        }

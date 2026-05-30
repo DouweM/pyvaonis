@@ -27,11 +27,27 @@ class LiveImage(BaseModel):
     stacking_count: int | None = None
 
     def url(self, ip: str) -> str:
-        """Full HTTP URL (no auth). The query is cache-busting per stacked frame."""
+        """Full HTTP URL with the per-frame selector query (no auth).
+
+        The ``androidImageIndex``/``androidCaptureId`` query makes the firmware *render* this exact
+        stacked frame on demand — correct, but slow while it is also stacking. For the already-
+        written file use :meth:`static_url` / :attr:`ftp_path` instead.
+        """
         return (
             f"http://{ip}:{HTTP_PORT}{self.url_path}"
             f"?androidImageIndex={self.index}&androidCaptureId={self.capture_id}"
         )
+
+    def static_url(self, ip: str) -> str:
+        """HTTP URL of the already-written frame file, with no render-triggering query string."""
+        return f"http://{ip}:{HTTP_PORT}{self.url_path}"
+
+    @property
+    def ftp_path(self) -> str:
+        """FTP path of the same frame file (the ``/files`` HTTP root maps to ``/system`` on FTP)."""
+        if self.url_path.startswith("/files/"):
+            return "/system/" + self.url_path[len("/files/") :]
+        return self.url_path
 
 
 def _capture_image(capture: dict[str, Any]) -> LiveImage | None:

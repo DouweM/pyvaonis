@@ -20,12 +20,13 @@ from .const import BAND_5_GHZ
 from .ftp import FtpEntry
 from .models import AutoInitBody
 from .models import ObservationBody
+from .models import PlanBody
 from .models import StellinaStatus
 from .observation import LiveImage
 from .observation import ObservationProgress
-from .sequence import SequenceEvent
-from .sequence import SequenceItem
-from .sequence import run_sequence
+from .plan import PlanItem
+from .plan import PlanProgress
+from .plan import build_plan
 from .weather import NightConditions
 from .weather import assess_night
 from .weather import cloud_forecast
@@ -40,8 +41,9 @@ __all__ = [
     "NightConditions",
     "ObservationBody",
     "ObservationProgress",
-    "SequenceEvent",
-    "SequenceItem",
+    "PlanBody",
+    "PlanItem",
+    "PlanProgress",
     "StellinaClient",
     "StellinaCommandError",
     "StellinaConnectionError",
@@ -50,12 +52,12 @@ __all__ = [
     "VisibleObject",
     "assess_night",
     "build_auth_header",
+    "build_plan",
     "cloud_forecast",
     "get_object",
     "is_dark",
     "load_catalog",
     "observing_window",
-    "run_sequence",
     "sun_altitude",
     "visible_now",
 ]

@@ -11,13 +11,13 @@ against real hardware (firmware 2.35.7). Reference docs:
 - [`docs/STATUS.md`](docs/STATUS.md) — the full status-object schema
 This README is the usage guide.
 
-> ⚠️ **Status: alpha, not yet run against hardware.** The crypto/auth, catalog, astronomy,
-> sequencing, parsing, the EIO3 frame codec, and the safety guards are unit-tested. The socket
-> protocol (Engine.IO **v3**, event `STATUS_UPDATED`) was recovered from the decompiled app, so the
-> two earlier unknowns are resolved — but the live connection and exact status/image JSON shapes
-> still want one on-hardware confirmation (`stellina --debug watch`). See
-> [Hardware validation](#hardware-validation). A full safety audit of the decompiled commands
-> informs the [guards](#safety) below — the firmware-upload (brick) endpoint is never callable.
+> ✅ **Status: working against real hardware** (firmware 2.35.7, scope `stellina-f8bd80`).
+> Confirmed end-to-end: the Engine.IO **v3** socket + `STATUS_UPDATED` stream, Ed25519 auth,
+> take-control, live observation/stacking readout, live + full-res image fetch, the FTP library,
+> and the native plan body shapes. The crypto/auth, catalog, astronomy, plan scheduling, parsing,
+> the EIO3 frame codec, and the safety guards are also unit-tested. A full safety audit of the
+> decompiled commands informs the [guards](#safety) below — the firmware-upload (brick) endpoint is
+> never callable. See [Hardware validation](#hardware-validation).
 
 ---
 
@@ -29,7 +29,7 @@ This README is the usage guide.
 - [CLI reference](#cli-reference)
 - [Library reference](#library-reference)
 - [Targets & "tonight"](#targets--tonight)
-- [Live view, stacking & sequences](#live-view-stacking--sequences)
+- [Live view, stacking & plans](#live-view-stacking--plans)
 - [Full-res export & saved library](#full-res-export--saved-library)
 - [Home Assistant integration](#home-assistant-integration)
 - [Wi-Fi bridge (GL.iNet)](#wi-fi-bridge-glinet)
@@ -50,7 +50,8 @@ This README is the usage guide.
   (Sun ≤ −10°) and the dusk→dawn observing window.
 - **Live imaging**: read the progressively-stacked frame, current target/step, stacking count and
   integration time; download the current frame.
-- **Sequences**: run an unattended plan ("observe these N targets, then park & shut down").
+- **Plans**: upload the telescope's own **Plan My Night** ("observe these N targets on a schedule")
+  — the firmware then runs the whole night autonomously, even if you disconnect.
 - **Weather**: a cloud-cover forecast + Moon → "is tonight worth it?" verdict (Open-Meteo, no key).
 - **Export & archive**: render full-res TIFF / JPEG-XL of a capture; browse & download the saved
   image library over FTP.
@@ -89,8 +90,9 @@ client:
 - **Disconnecting** commands warn first: `shutdown` needs `--yes`; `switch_frequency` validates the
   band and warns it drops the link.
 - **State guards** mirror the app: commands need control (`master`), the scope not shutting down, and
-  (for observe) `initialized` + no operation already running; `sequence` waits for idle before
-  parking/shutting down. `take_control` warns that it demotes the phone app.
+  (for observe/plan) `initialized` + no operation already running. `take_control` waits for the
+  status stream to confirm control (and warns that it demotes the phone app); `observe --replace`
+  stops a running observation and waits for idle before taking over.
 
 None of this is a substitute for care, but the dangerous surfaces are gated rather than one typo away.
 
@@ -124,7 +126,8 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 | `observe [--object-name … --ra … --de …]` | Slew to explicit coordinates |
 | `autoinit LAT LON [--skip-autofocus]` | Initialise / align at a location |
 | `stop` / `park` / `shutdown` | Stop observation / park / power off |
-| `sequence T1:30 T2:20 … LAT LON [--no-park] [--shutdown] [--wait-for-dark]` | Unattended plan |
+| `plan T1:30 T2:20 … LAT LON [--name N] [--wait-for-dark] [--start-in MIN]` | Start the native autonomous Plan-My-Night |
+| `stop-plan` | Cancel the running native plan |
 | `export CAPTURE_ID [--format tiff\|jxl] [--out f]` | Render & download full-res |
 | `library [PATH]` | List the saved FTP library (default `/user`) |
 | `download FTP_PATH [--out f]` | Download a saved file |
@@ -146,15 +149,15 @@ stellina selftest 52.37 4.90     # functional pass/fail across every capability
 stellina api app/status          # poke any endpoint; e.g. -X POST general/park
 ```
 
-Example unattended night:
+Example unattended night (native autonomous plan, starts at dusk):
 ```bash
-stellina sequence M42:30 "Andromeda Galaxy:45" Jupiter:10 52.37 4.90 --wait-for-dark --shutdown
+stellina plan M42:30 "Andromeda Galaxy:45" Jupiter:10 52.37 4.90 --wait-for-dark
 ```
 
 ## Library reference
 
 ```python
-from pystellina import StellinaClient, ObservationBody, visible_now, get_object, run_sequence, SequenceItem
+from pystellina import StellinaClient, ObservationBody, visible_now, get_object, PlanItem
 
 async with StellinaClient(ip="10.0.0.1") as scope:   # opens socket.io, waits for first status
     await scope.take_control()
@@ -171,14 +174,15 @@ async with StellinaClient(ip="10.0.0.1") as scope:   # opens socket.io, waits fo
 
 Key surfaces:
 - `StellinaClient` — `connect/disconnect`, `take_control/release_control`, `start_autoinit`,
-  `start_observation/observe_object/stop_observation`, `park`, `request_shutdown`,
-  `switch_frequency`, `current_observation/current_image/recent_images/fetch_current_image`,
+  `start_observation/observe_object/stop_observation`, `start_plan/stop_plan/plan_progress`,
+  `park`, `request_shutdown`, `switch_frequency`,
+  `current_observation/current_image/recent_images/fetch_current_image`,
   `export_url/export_capture`, `library/download_file`, `post/get/request`. Accepts an existing
   `aiohttp.ClientSession` (HA passes its own) and `on_status(callback)` for push updates.
-- `pystellina.catalog` — `load_catalog`, `get_object`, `visible_now`, `CatalogObject`.
+- `pystellina.catalog` — `load_catalog`, `get_object`, `visible_now`, `visible_tonight`, `CatalogObject`.
 - `pystellina.astro` — `is_dark`, `sun_altitude`, `observing_window`, `solar_system_radec`.
 - `pystellina.observation` — `ObservationProgress`, `LiveImage`, `recent_images`.
-- `pystellina.sequence` — `run_sequence`, `SequenceItem`, `SequenceEvent`.
+- `pystellina.plan` — `build_plan`, `PlanItem`, `PlanProgress`.
 - `pystellina.ftp` — `list_dir`, `download`, `FtpEntry`.
 
 ## Targets & "tonight"
@@ -205,22 +209,37 @@ apktool d -f -s -o out singularity.apk
 python tools/extract_catalog.py singularity.apk --strings out/res/values/strings.xml
 ```
 
-## Live view, stacking & sequences
+## Live view, stacking & plans
 
 During an observation the telescope **live-stacks**: one capture accumulates frames over time, so
-integration grows as `stacking_count × exposure` — the app's "layering over a longer exposure". A
-sequence step is just one observation held for its duration while the scope stacks.
+integration grows as `stacking_count × exposure` — the app's "layering over a longer exposure".
+
+The live frame is already written to the scope's disk, so `stellina image` downloads that file
+directly (instant). `--rendered` instead asks the firmware to re-encode the JPEG on demand (what
+the app does) — correct, but slow while it is also stacking.
+
+A **plan** is the app's *Plan My Night*: you upload a list of targets each with a time window
+(`planner/startPlan`) and the **firmware runs the whole night itself** — auto-initialising, slewing
+target-to-target on schedule, advancing when each window ends — so it continues even if the
+controller disconnects. `build_plan()` assigns back-to-back windows from a simple `target:minutes`
+list:
 
 ```python
-from pystellina import run_sequence, SequenceItem
-await run_sequence(
-    scope,
-    [SequenceItem("M42", 30), SequenceItem("M51", 20), SequenceItem("Jupiter", 10)],
-    latitude=52.37, longitude=4.90,
-    require_dark=True, wait_for_dark=True, park_at_end=True, shutdown_at_end=True,
-    on_event=lambda e: print(e.kind, e.item and e.item.target),
+from pystellina import PlanItem
+# fire-and-forget: returns once the plan is uploaded; the scope runs it autonomously
+await scope.take_control()
+await scope.start_plan(
+    [PlanItem("M42", 30), PlanItem("M51", 20), PlanItem("Jupiter", 10)],
+    name="tonight", latitude=52.37, longitude=4.90,
+    start_time=None,           # or a dusk datetime to defer the start
 )
+print(scope.plan_progress())   # state, current target index/name, target_count
+# ... later, from any session:
+await scope.stop_plan()
 ```
+
+The native plan parks at the end on its own but has **no power-off step** — keep a session
+connected and watch `plan_progress().finished` if you want to `request_shutdown()` afterwards.
 
 ## Weather & full automation
 
@@ -278,15 +297,13 @@ automation:
       - service: stellina.run_plan
         data:
           targets: ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
-          wait_for_dark: true          # waits until the Sun is below -10°
-          park: true
-          shutdown: true               # safe: it stops + parks + waits for idle first
-      # (optional) cut power after it shuts down
+          wait_for_dark: true          # schedule the start at the next dusk (Sun below -10°)
+      # the firmware runs the night itself and parks at the end; (optional) cut power later
 ```
 
-`stellina.run_plan` returns immediately (`{started: true}`); `stellina.stop_plan` cancels a running
-plan. The same plan is available standalone from the CLI:
-`stellina sequence M42:30 M51:20 … LAT LON --wait-for-dark --shutdown`.
+`stellina.run_plan` uploads the native plan and returns immediately (`{started: true}`); the scope
+then runs autonomously. `stellina.stop_plan` cancels it. The same plan is available standalone from
+the CLI: `stellina plan M42:30 M51:20 … LAT LON --wait-for-dark`.
 
 ## Full-res export & saved library
 
@@ -385,7 +402,7 @@ pystellina/                 # the library (flat layout)
   catalog.py                # bundled catalog, get_object, visible_now
   astro.py                  # sun position, is_dark, observing_window, ephemerides
   observation.py            # ObservationProgress, LiveImage, recent_images
-  sequence.py               # run_sequence (unattended plans)
+  plan.py                   # native Plan-My-Night: build_plan + PlanProgress
   weather.py                # cloud forecast (Open-Meteo) + Moon -> night verdict
   ftp.py                    # saved-library browse/download
   _eio3.py                  # minimal Engine.IO v3 / Socket.IO v2 websocket client
@@ -397,7 +414,7 @@ custom_components/stellina/ # HACS integration wrapping pystellina
   media_source.py http.py   # media browser + proxy view
   manifest.json hacs.json strings.json services.yaml const.py
 tools/extract_catalog.py    # regenerate data/catalog.json from an APK
-tests/                      # pytest (auth, catalog, astro, observation, sequence, ftp, export, models)
+tests/                      # pytest (auth, catalog, astro, observation, plan, ftp, export, models)
 PROTOCOL.md                 # reverse-engineered wire protocol
 ```
 

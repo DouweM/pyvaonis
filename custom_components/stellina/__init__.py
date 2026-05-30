@@ -48,10 +48,9 @@ EXPORT_SCHEMA = vol.Schema(
 RUN_PLAN_SCHEMA = vol.Schema(
     {
         vol.Required("targets"): [str],  # e.g. ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
+        # The native plan runs autonomously (auto-init → targets → park). It has no power-off step;
+        # dark-gating is handled by scheduling the start, hence only wait_for_dark here.
         vol.Optional("wait_for_dark", default=True): bool,
-        vol.Optional("require_dark", default=True): bool,
-        vol.Optional("park", default=True): bool,
-        vol.Optional("shutdown", default=False): bool,
     }
 )
 # Weather/dew/rain gating is intentionally NOT done here — gate the automation that calls this
@@ -128,43 +127,34 @@ def _register_services(hass: HomeAssistant) -> None:
         return entries[0].runtime_data
 
     async def run_plan(call: ServiceCall) -> ServiceResponse:
-        """Run an unattended observing plan in the background (gate weather in the automation)."""
-        from pystellina import SequenceItem
-        from pystellina import run_sequence
+        """Start the telescope's native autonomous plan (gate weather in the automation)."""
+        from datetime import UTC
+        from datetime import datetime
+
+        from pystellina import PlanItem
+        from pystellina import observing_window
 
         coordinator = _first_coordinator()
-        if coordinator.plan_task is not None and not coordinator.plan_task.done():
-            raise HomeAssistantError("a plan is already running (call stellina.stop_plan first)")
         lat, lon = hass.config.latitude, hass.config.longitude
-        items = [SequenceItem.parse(t) for t in call.data["targets"]]
+        items = [PlanItem.parse(t) for t in call.data["targets"]]
 
-        async def _runner() -> None:
-            try:
-                await run_sequence(
-                    coordinator.client,
-                    items,
-                    latitude=lat,
-                    longitude=lon,
-                    require_dark=call.data["require_dark"],
-                    wait_for_dark=call.data["wait_for_dark"],
-                    park_at_end=call.data["park"],
-                    shutdown_at_end=call.data["shutdown"],
-                    on_event=lambda e: _LOGGER.info("plan %s %s %s", e.kind, e.item, e.detail),
-                )
-            except Exception:
-                _LOGGER.exception("Stellina plan failed")
+        start_time = None
+        if call.data["wait_for_dark"]:
+            window = observing_window(lat, lon)
+            if window is not None:
+                start_time = max(window[0], datetime.now(UTC))
 
-        coordinator.plan_task = hass.async_create_background_task(_runner(), "stellina_plan")
+        await coordinator.client.take_control()
+        await coordinator.client.start_plan(
+            items, name="Home Assistant plan", latitude=lat, longitude=lon, start_time=start_time
+        )
         return {"started": True, "targets": call.data["targets"]}
 
     async def stop_plan(call: ServiceCall) -> None:
-        """Cancel a running plan and stop the current observation."""
+        """Cancel the running native plan."""
         coordinator = _first_coordinator()
-        if coordinator.plan_task is not None:
-            coordinator.plan_task.cancel()
-            coordinator.plan_task = None
         with suppress(Exception):
-            await coordinator.client.stop_observation()
+            await coordinator.client.stop_plan()
 
     hass.services.async_register(
         DOMAIN,

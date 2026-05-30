@@ -488,6 +488,57 @@ class StellinaClient:
     async def stop_observation(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_OBSERVATION)
 
+    # -- native plan (Plan My Night) ----------------------------------------------------
+    async def start_plan(
+        self,
+        items: list[Any],
+        *,
+        name: str = "pystellina plan",
+        latitude: float,
+        longitude: float,
+        start_time: Any | None = None,
+        allow_solar: bool = False,
+    ) -> dict[str, Any]:
+        """Upload and start the telescope's native autonomous plan (``planner/startPlan``).
+
+        ``items`` is a list of :class:`~pystellina.plan.PlanItem` (``target``/``minutes``). The
+        firmware runs the whole plan itself — auto-initialising and advancing target-to-target on
+        the schedule — so it keeps going after this client disconnects. Refused unless idle (the
+        app gates startPlan on ``currentOperation == null``); stop any observation first.
+        """
+        from .plan import build_plan
+
+        self._require_idle("start_plan")
+        body = build_plan(
+            list(items),
+            name=name,
+            latitude=latitude,
+            longitude=longitude,
+            device_id=self.device_id,
+            start_time=start_time,
+            observatory_name=(
+                (self.status.raw.get("settings") or {}).get("telescopeName")
+                if self.status
+                else None
+            )
+            or "pystellina",
+            allow_solar=allow_solar,
+        )
+        return await self.post(const.Endpoint.START_PLAN, body.to_payload())
+
+    async def stop_plan(self) -> dict[str, Any]:
+        """Cancel the running native plan (``planner/stopPlan``)."""
+        self._require_control("stop_plan")
+        return await self.post(const.Endpoint.STOP_PLAN)
+
+    def plan_progress(self) -> Any:
+        """Parsed progress of the running native plan, or None when no plan is active."""
+        from .plan import PlanProgress
+
+        if self.status is None:
+            return None
+        return PlanProgress.from_status(self.status.raw)
+
     # -- in-observation controls (the app's Change Framing / Restart autofocus / etc.) ---
     async def adjust_framing(self, x: int, y: int, rot: float = 0.0) -> dict[str, Any]:
         """Nudge the live framing — ``x``/``y`` integer offsets, ``rot`` in degrees."""
