@@ -7,6 +7,7 @@ through a bridge). Requires the ``cli`` extra: ``pip install "pystellina[cli]"``
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -122,6 +123,18 @@ def _location(
 
 def _print(data: Any) -> None:
     typer.echo(json.dumps(data, indent=2, default=str))
+
+
+def _vis_dot(altitude: float) -> str:
+    """Colored visibility dot (●) mirroring the app's green/orange/red altitude indicator."""
+    from .catalog import visibility_rating
+
+    color = {
+        "good": typer.colors.GREEN,
+        "poor": typer.colors.YELLOW,
+        "not_visible": typer.colors.RED,
+    }
+    return typer.style("●", fg=color[visibility_rating(altitude)])
 
 
 def _local(dt: Any) -> str:
@@ -349,7 +362,8 @@ def tonight(
             mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
             flag = "up now " if v.up_now else "rises  "
             typer.echo(
-                f"{v.obj.display_name:<22} peak {v.peak_altitude:5.1f}deg @ {_local(v.peak_time)} "
+                f"{_vis_dot(v.peak_altitude)} {v.obj.display_name:<22} "
+                f"peak {v.peak_altitude:5.1f}deg @ {_local(v.peak_time)} "
                 f"{flag} grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
             )
         if not rows:
@@ -367,8 +381,8 @@ def tonight(
     for v in rows:
         mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
         typer.echo(
-            f"{v.obj.display_name:<22} alt {v.altitude:5.1f}deg  grade {v.obj.grade}  "
-            f"{v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
+            f"{_vis_dot(v.altitude)} {v.obj.display_name:<22} alt {v.altitude:5.1f}deg  "
+            f"grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
         )
     if not rows:
         typer.echo(
@@ -458,35 +472,72 @@ def image(
     ),
     ip: str = DEFAULT_IP,
 ) -> None:
-    """Download the current live-stacked frame (read-only; SAFE during an observation).
+    """Download the latest stacked frame (read-only; SAFE during an observation).
 
-    The latest stacked frame is already written to the scope's disk, so by default (`--fast`) we
-    download that file directly — instant. `--rendered` instead asks the firmware to re-render the
-    JPEG on demand (what the app does), which is slow while it is also stacking. Default filename is
-    the current object + frame index (e.g. M104_0042.jpg), so repeated runs don't overwrite.
+    While observing, grabs the current live frame; when idle, falls back to the most recent finished
+    run's last frame (use `stellina recent` to see runs, `stellina library`/`download` for older
+    ones). The frame is already on the scope's disk, so by default (`--fast`) we download that file
+    directly — instant. `--rendered` re-renders via the firmware (slow; current frame only). Default
+    filename is the object + frame index (e.g. M104_0042.jpg), so repeated runs don't overwrite.
     """
 
     async def _go(scope: StellinaClient) -> Any:
         img = scope.current_image()
         obs = scope.current_observation()
+        live = img is not None
+        if img is None:  # idle → most recent finished frame
+            recent_frames = scope.recent_images()
+            img = recent_frames[0] if recent_frames else None
         if img is None:
             return None, "stellina.jpg"
-        if rendered:
+        if rendered and live and img.capture_id:
             scope.request_timeout = timeout
-            data = await scope.fetch_image(img)  # on-demand render (slow)
+            data = await scope.fetch_image(
+                img
+            )  # on-demand render (slow); only valid for live frame
         else:
             data = await scope.download_file(img.ftp_path)  # static file over FTP (fast)
-        name = obs.object_name if obs and obs.object_name else "stellina"
+        name = obs.object_name if obs and obs.object_name else _run_label(img.url_path)
         return data, f"{_slugify(name)}_{img.index:04d}.jpg"
 
     data, default = _run(_with_client(ip, False, _go))
     if not data:
-        typer.echo("no current image (telescope is not observing)")
+        typer.echo("no image available (no current or recent run on the telescope)")
         raise typer.Exit(1)
     path = out or default
     with open(path, "wb") as fh:
         fh.write(data)
     typer.echo(f"wrote {len(data)} bytes to {path}")
+
+
+def _run_label(url_path: str) -> str:
+    """Derive a run label from an image path, e.g. .../captures/<storeId>/images/IMG.jpg -> storeId."""
+    parts = [p for p in url_path.split("/") if p]
+    return parts[-3] if len(parts) >= 3 else "stellina"
+
+
+@app.command(rich_help_panel=PANEL_LIVE)
+def recent(limit: int = 15, ip: str = DEFAULT_IP) -> None:
+    """List recent capture runs stored on the telescope (newest first), read-only.
+
+    Each run is a folder under the scope's library; download a frame with
+    `stellina download <path>` or browse with `stellina library <path>`.
+    """
+
+    async def _go(scope: StellinaClient) -> Any:
+        runs: list[Any] = []
+        for root in (const.FTP_ROOT, "/system/plan"):
+            with contextlib.suppress(StellinaError):
+                runs += [e for e in await scope.library(root) if e.is_dir]
+        return runs
+
+    runs = _run(_with_client(ip, False, _go))
+    runs.sort(key=lambda e: e.path, reverse=True)  # storeId encodes date → newest first
+    for e in runs[:limit]:
+        name = e.path.rstrip("/").split("/")[-1]
+        typer.echo(f"{name:<48} {e.path}")
+    if not runs:
+        typer.echo("no stored runs found")
 
 
 @app.command(rich_help_panel=PANEL_LIVE)

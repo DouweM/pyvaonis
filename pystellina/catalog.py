@@ -216,6 +216,20 @@ class TonightObject(BaseModel):
     up_now: bool  # already above min_altitude at the window start / now
 
 
+def visibility_rating(altitude: float) -> str:
+    """The app's green/orange/red observability indicator, purely from altitude (not ``grade``).
+
+    Mirrors ``CatalogAdapter.setVisibility``: ``good`` when 20°≤alt≤80°, ``not_visible`` below 1°,
+    else ``poor`` (low on the horizon or near the zenith). This is distinct from ``grade`` (the
+    catalog's curated target-quality score).
+    """
+    if altitude < 1.0:
+        return "not_visible"
+    if 20.0 <= altitude <= 80.0:
+        return "good"
+    return "poor"
+
+
 @cache
 def load_catalog() -> tuple[CatalogObject, ...]:
     """Load and cache the bundled catalog."""

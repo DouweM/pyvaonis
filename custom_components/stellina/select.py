@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from pystellina import visibility_rating
 from pystellina import visible_now
 
 from .coordinator import StellinaConfigEntry
@@ -63,6 +64,7 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
             {
                 "name": v.obj.display_name,
                 "altitude": round(v.altitude, 1),
+                "visibility": visibility_rating(v.altitude),  # good / poor / not_visible (app's color)
                 "grade": v.obj.grade,
                 "magnitude": v.obj.magnitude,
                 "constellation": v.obj.constellation,

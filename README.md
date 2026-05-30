@@ -128,8 +128,9 @@ control, busy, unreachable) print one clean line; add `--debug` for the full tra
 | `status` | Connect and print one status snapshot (read-only) |
 | `watch [--seconds N]` | Stream raw socket.io events (discovery/debug) |
 | `observing` | Current observation: target, step, stacking count, integration |
-| `image [--out f.jpg] [--timeout S]` | Download the current live-stacked frame (auto-names `<object>_<frame>.jpg`) |
-| `tonight [LAT LON] [--now] [--min-grade G] [--limit N]` | Peak altitudes across tonight's dark window (`--now` for a right-now snapshot) |
+| `image [--out f.jpg] [--rendered]` | Download the latest frame (current run, or most recent when idle); auto-names `<object>_<frame>.jpg` |
+| `recent [--limit N]` | List recent capture runs stored on the telescope (newest first) |
+| `tonight [LAT LON] [--now] [--min-grade G] [--limit N]` | Peak altitudes over tonight's dark window with a green/orange/red visibility dot (`--now` for a snapshot) |
 | `forecast [LAT LON]` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
 | `info OBJECT` | Full catalog detail (name, description, magnitude, …) for an object |
 | `observe TARGET` / `observe --ra … --de …` | Slew to a catalog object (`M42`, `Jupiter`) or manual coordinates |

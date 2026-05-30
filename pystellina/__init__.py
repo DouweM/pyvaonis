@@ -10,6 +10,7 @@ from .catalog import CatalogObject
 from .catalog import VisibleObject
 from .catalog import get_object
 from .catalog import load_catalog
+from .catalog import visibility_rating
 from .catalog import visible_now
 from .client import StellinaClient
 from .client import StellinaCommandError
@@ -59,6 +60,7 @@ __all__ = [
     "load_catalog",
     "observing_window",
     "sun_altitude",
+    "visibility_rating",
     "visible_now",
 ]
 

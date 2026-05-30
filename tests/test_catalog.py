@@ -7,8 +7,18 @@ from datetime import datetime
 
 from pystellina.catalog import get_object
 from pystellina.catalog import load_catalog
+from pystellina.catalog import visibility_rating
 from pystellina.catalog import visible_now
 from pystellina.catalog import visible_tonight
+
+
+def test_visibility_rating_thresholds() -> None:
+    # mirrors the app: good 20-80°, not_visible <1°, poor otherwise
+    assert visibility_rating(0.5) == "not_visible"
+    assert visibility_rating(10.0) == "poor"
+    assert visibility_rating(45.0) == "good"
+    assert visibility_rating(85.0) == "poor"
+
 
 # Amsterdam, a winter evening when Orion (M42) is well up.
 LAT, LON = 52.37, 4.90
