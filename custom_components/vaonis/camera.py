@@ -37,14 +37,28 @@ class VaonisCamera(VaonisEntity, Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return the latest stacked frame, or None when idle."""
+        """Return the latest stacked frame (current run, or most recent when idle).
+
+        Fetches the already-written frame file (fast/static), not the slow on-demand render — the
+        latter can exceed HA's camera-image timeout while the scope is stacking.
+        """
+        client = self.coordinator.client
+        img = client.current_image()
+        if img is None:
+            recent = client.recent_images()
+            img = recent[0] if recent else None
+        if img is None:
+            return None
         try:
-            return await self.coordinator.client.fetch_current_image()
+            return await client.download_file(img.ftp_path)
         except Exception:
-            _LOGGER.debug("no current Stellina image", exc_info=True)
+            _LOGGER.debug("no current Vaonis image", exc_info=True)
             return None
 
     @property
     def available(self) -> bool:
-        """Available while an observation with a live frame is in progress."""
-        return super().available and self.coordinator.client.current_image() is not None
+        """Available whenever a current or recent frame exists."""
+        client = self.coordinator.client
+        return super().available and (
+            client.current_image() is not None or bool(client.recent_images())
+        )

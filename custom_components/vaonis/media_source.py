@@ -17,15 +17,16 @@ from homeassistant.components.media_source import PlayMedia
 from homeassistant.components.media_source import Unresolvable
 from homeassistant.core import HomeAssistant
 
+# FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
+from pyvaonis.const import FTP_ROOT
+
 from .const import DOMAIN
 from .coordinator import VaonisConfigEntry
 from .http import _mime_for
 
-FTP_ROOT = "/user"
-
 
 async def async_get_media_source(hass: HomeAssistant) -> VaonisMediaSource:
-    """Set up the Stellina media source."""
+    """Set up the Vaonis media source."""
     return VaonisMediaSource(hass)
 
 
@@ -44,7 +45,7 @@ def _entries(hass: HomeAssistant) -> list[VaonisConfigEntry]:
 class VaonisMediaSource(MediaSource):
     """Browse telescope captures: live/recent frames and the saved FTP archive."""
 
-    name = "Stellina"
+    name = "Vaonis"
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise the media source."""
@@ -57,7 +58,7 @@ class VaonisMediaSource(MediaSource):
         if len(parts) != 3 or parts[1] not in ("http", "ftp"):
             raise Unresolvable(f"Cannot resolve {item.identifier}")
         entry_id, kind, ref = parts
-        url = f"/api/stellina_media/{entry_id}/{kind}/{ref}"
+        url = f"/api/vaonis_media/{entry_id}/{kind}/{ref}"
         mime = "image/jpeg" if kind == "http" else _mime_for(base64.urlsafe_b64decode(ref).decode())
         return PlayMedia(url, mime)
 
@@ -66,7 +67,7 @@ class VaonisMediaSource(MediaSource):
         if not item.identifier:
             return self._folder(
                 None,
-                "Stellina",
+                "Vaonis",
                 [self._folder(e.entry_id, e.title, []) for e in _entries(self.hass)],
             )
 
@@ -87,8 +88,11 @@ class VaonisMediaSource(MediaSource):
             )
 
         if parts[1] == "recent":
+            # static_url (the written file), not the slow on-demand render
             children = [
-                self._image(f"{entry.entry_id}|http|{_b64(img.url(client.ip))}", f"#{img.index}")
+                self._image(
+                    f"{entry.entry_id}|http|{_b64(img.static_url(client.ip))}", f"#{img.index}"
+                )
                 for img in client.recent_images()
             ]
             return self._folder(item.identifier, "Recent captures", children)
