@@ -9,7 +9,11 @@ control is acquired on demand only when an action (a button/service/select) need
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import Awaitable
+from collections.abc import Callable
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -45,6 +49,20 @@ class StellinaCoordinator(DataUpdateCoordinator[StellinaStatus]):
     def _handle_status(self, status: StellinaStatus) -> None:
         """Receive a pushed status from the telescope."""
         self.async_set_updated_data(status)
+
+    async def run_action(self, action: Callable[[StellinaClient], Awaitable[Any]]) -> Any:
+        """One-shot control: take control, run ``action``, then release it (HA never holds control).
+
+        Releasing does not stop a started observation/plan — the scope runs on autonomously — so the
+        phone can take over again right after. Release failures (e.g. the link dropping after a
+        shutdown) are ignored.
+        """
+        await self.client.take_control()
+        try:
+            return await action(self.client)
+        finally:
+            with contextlib.suppress(StellinaError):
+                await self.client.release_control()
 
     async def _async_update_data(self) -> StellinaStatus:
         """Connect (once), read-only; returns the current status. Control is taken on demand."""

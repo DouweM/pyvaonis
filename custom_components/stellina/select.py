@@ -92,11 +92,9 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
-        """Take control and start observing the chosen object."""
-        client = self.coordinator.client
+        """Take control, start observing the chosen object, then release (one-shot)."""
         try:
-            await client.take_control()
-            await client.observe_object(option, replace=True)
+            await self.coordinator.run_action(lambda c: c.observe_object(option, replace=True))
         except StellinaError as err:
             raise HomeAssistantError(str(err)) from err
         self._attr_current_option = option

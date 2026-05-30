@@ -93,11 +93,16 @@ class StellinaButton(StellinaEntity, ButtonEntity):
         self.entity_description = description
 
     async def async_press(self) -> None:
-        """Take control if the action needs it, then execute — surfacing errors cleanly."""
-        client = self.coordinator.client
+        """Execute the command — surfacing errors cleanly.
+
+        Control-needing actions are one-shot: take control, act, release (so the phone can resume).
+        The take/release-control buttons are the manual exception (they hold/drop control directly).
+        """
+        press_fn = self.entity_description.press_fn
         try:
             if self.entity_description.takes_control:
-                await client.take_control()
-            await self.entity_description.press_fn(client)
+                await self.coordinator.run_action(press_fn)
+            else:
+                await press_fn(self.coordinator.client)
         except StellinaError as err:
             raise HomeAssistantError(str(err)) from err

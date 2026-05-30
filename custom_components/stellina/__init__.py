@@ -191,17 +191,21 @@ def _register_services(hass: HomeAssistant) -> None:
             if window is not None:
                 start_time = max(window[0], datetime.now(UTC))
 
-        await coordinator.client.take_control()
-        await coordinator.client.start_plan(
-            items, name="Home Assistant plan", latitude=lat, longitude=lon, start_time=start_time
+        await coordinator.run_action(
+            lambda c: c.start_plan(
+                items,
+                name="Home Assistant plan",
+                latitude=lat,
+                longitude=lon,
+                start_time=start_time,
+            )
         )
         return {"started": True, "targets": call.data["targets"]}
 
     async def stop_plan(call: ServiceCall) -> None:
         """Cancel the running native plan."""
-        coordinator = _first_coordinator()
         with suppress(Exception):
-            await coordinator.client.stop_plan()
+            await _first_coordinator().run_action(lambda c: c.stop_plan())
 
     hass.services.async_register(
         DOMAIN,
@@ -214,8 +218,10 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def observe(call: ServiceCall) -> None:
         """Slew to a catalog object (by id/name/designation) and start imaging."""
-        await _first_coordinator().client.observe_object(
-            call.data["target"], allow_solar=call.data["allow_solar"], replace=True
+        await _first_coordinator().run_action(
+            lambda c: c.observe_object(
+                call.data["target"], allow_solar=call.data["allow_solar"], replace=True
+            )
         )
 
     hass.services.async_register(
@@ -224,27 +230,29 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def autoinit(call: ServiceCall) -> None:
         """Initialise/align the telescope (defaults to Home Assistant's configured location)."""
-        client = _first_coordinator().client
         lat = call.data.get("latitude", hass.config.latitude)
         lon = call.data.get("longitude", hass.config.longitude)
-        await client.take_control()
-        await client.start_autoinit(lat, lon, skip_auto_focus=call.data["skip_autofocus"])
+        await _first_coordinator().run_action(
+            lambda c: c.start_autoinit(lat, lon, skip_auto_focus=call.data["skip_autofocus"])
+        )
 
     async def adjust_framing(call: ServiceCall) -> None:
         """Nudge the live framing (the app's 'Change Framing'); safe during an observation."""
-        client = _first_coordinator().client
-        await client.take_control()
-        await client.adjust_framing(call.data["x"], call.data["y"], call.data["rot"])
+        await _first_coordinator().run_action(
+            lambda c: c.adjust_framing(call.data["x"], call.data["y"], call.data["rot"])
+        )
 
     async def set_camera_params(call: ServiceCall) -> None:
         """Live-tune gain/exposure/saturation during an observation."""
-        client = _first_coordinator().client
         exposure_us = call.data.get("exposure_seconds")
-        await client.take_control()
-        await client.set_camera_params(
-            gain=call.data.get("gain"),
-            exposure_micro_sec=int(exposure_us * 1_000_000) if exposure_us is not None else None,
-            saturation=call.data.get("saturation"),
+        await _first_coordinator().run_action(
+            lambda c: c.set_camera_params(
+                gain=call.data.get("gain"),
+                exposure_micro_sec=(
+                    int(exposure_us * 1_000_000) if exposure_us is not None else None
+                ),
+                saturation=call.data.get("saturation"),
+            )
         )
 
     hass.services.async_register(
