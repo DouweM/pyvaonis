@@ -97,6 +97,39 @@ async def test_observe_blocks_near_sun() -> None:
         await c.start_observation(ObservationBody(object_name="too close", ra=sun_ra, de=sun_dec))
 
 
+async def test_in_observation_actions_require_control_and_build_bodies() -> None:
+    blocked = _client(masterDeviceId="someone-else")
+    with pytest.raises(StellinaCommandError, match="control"):
+        await blocked.adjust_framing(1, 2)
+
+    c = _client()  # we are master
+    seen: dict[str, Any] = {}
+
+    async def fake_post(endpoint: str, body: Any = None, **k: Any) -> dict[str, Any]:
+        seen["endpoint"] = endpoint
+        seen["body"] = body
+        return {"success": True}
+
+    c.post = fake_post  # type: ignore[method-assign]
+
+    await c.adjust_framing(5, -3, 1.5)
+    assert seen == {
+        "endpoint": "general/adjustObservationFraming",
+        "body": {"x": 5, "y": -3, "rot": 1.5},
+    }
+
+    await c.restart_autofocus()
+    assert seen["endpoint"] == "general/adjustObservationFocus"
+    assert seen["body"] == {"restartCapture": True}
+
+    await c.set_multi_light(True)
+    assert seen["endpoint"] == "app/setSettings"
+    assert seen["body"] == {"enableHdrBackground": True}  # no other settings in test status
+
+    await c.save_observation()
+    assert seen["endpoint"] == "capture/setToBeResumable"
+
+
 async def test_observe_allows_far_from_sun_and_sends_full_body() -> None:
     c = _client()
     captured: dict[str, Any] = {}

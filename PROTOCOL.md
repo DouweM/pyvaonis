@@ -225,6 +225,37 @@ defogStatus }` (**no battery** — Stellina is mains/USB powered), `motors { AZ,
 `{ success, result: {…} }`. `pystellina/observation.py` parses this; FTP `/user` was empty on the
 test unit (captures are served over HTTP `/files/...`).
 
+### In-observation controls (the app's live buttons) — all implemented
+
+- **Change Framing** → `POST general/adjustObservationFraming` `{x:int, y:int, rot:deg}` (axes/sign vary by model; pixel→step offsets).
+- **Restart autofocus** → `POST general/adjustObservationFocus` `{restartCapture:bool}` (deep-sky); `sun/restartAutofocus` (solar).
+- **Multi-Light** (CovalENS / HDR background) → a **setting**, not a per-observation flag: `POST app/setSettings {enableHdrBackground:bool}` (firmware ≥ 2.28). `StartObservationBody.hdrBackground` carries the *tuning* params only.
+- **Save** → `POST capture/setToBeResumable` — persists the current stack to the on-telescope stored-captures library (distinct from `capture/exportImageTiff|JpegXl` full-res export, and from the app's save-to-gallery/cloud which is just a download/upload).
+- **Live camera tuning** → `POST general/setUserParams` `{gain, exposureMicroSec, saturation, MAP}`.
+
+`pystellina`: `adjust_framing`, `restart_autofocus`, `set_multi_light`, `save_observation`, `set_camera_params`.
+
+## Catalog & browsing (offline-first — for a web UI)
+
+The app seeds a local DB from **bundled assets**; everything for browse/detail/plan-building is
+offline (no Vaonis account):
+- `assets/catalog/objects.json` (421 objects: ra/de, magnitude, apparent `size` + `realSize`,
+  `distance`, `discoveredBy/In`, `type`, `grade`, per-object imaging params) + **names/descriptions/
+  category & constellation titles/trivia text in `resources.arsc`** (EN+FR) + per-object image
+  `assets/catalog_object/<id-lowercased>.png` (the app rotates it 90°) + `assets/catalog/
+  constellations.json` (88, star positions + shapes) + `categories.json` (6 parents + sub-cats).
+- **Explore** = filter by category tree, constellation, Messier, free-text; **"recommended tonight"**
+  = objects at altitude 21–79° now (local AA+ math from RA/Dec + your lat/lon), sorted by grade, top 10.
+- **Favorites** = local Room DB keyed by account `userId`; cloud sync needs the Vaonis account
+  (`OrionUserAPI`). For a web UI, reimplement locally (localStorage/IndexedDB) by object id.
+- **Manual target** = a `StartObservationBody` from `ra/de/rotation/type` (`observationType=MANUAL`,
+  presets per type); the cloud only persists the saved-targets *list* (`OrionManualTargetAPI`).
+- **Plan My Night** = `PlanMyNightBody` (list of time-windowed `StartObservationBody`) sent to the
+  on-telescope `planner/startPlan`; the cloud only saves *named* plans.
+
+Commanding the scope is account-free over the local API; only cross-device favorites/manual/plan
+sync and the captured-image gallery need the Vaonis cloud.
+
 ## 6. Getting it onto your LAN (bridge options)
 
 Since the scope is AP-only, put a small router/AP in **client/bridge (WISP) mode** that joins

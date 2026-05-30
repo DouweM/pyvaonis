@@ -409,6 +409,55 @@ class StellinaClient:
     async def stop_observation(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_OBSERVATION)
 
+    # -- in-observation controls (the app's Change Framing / Restart autofocus / etc.) ---
+    async def adjust_framing(self, x: int, y: int, rot: float = 0.0) -> dict[str, Any]:
+        """Nudge the live framing — ``x``/``y`` integer offsets, ``rot`` in degrees."""
+        self._require_control("adjust_framing")
+        return await self.post(const.Endpoint.ADJUST_FRAMING, {"x": x, "y": y, "rot": rot})
+
+    async def restart_autofocus(self, *, restart_capture: bool = True) -> dict[str, Any]:
+        """Re-run deep-sky autofocus. ``restart_capture`` also restarts the current stack."""
+        self._require_control("restart_autofocus")
+        return await self.post(const.Endpoint.ADJUST_FOCUS, {"restartCapture": restart_capture})
+
+    async def set_camera_params(
+        self,
+        *,
+        gain: int | None = None,
+        exposure_micro_sec: int | None = None,
+        saturation: float | None = None,
+    ) -> dict[str, Any]:
+        """Live-tune camera parameters during an observation (only set fields are sent)."""
+        self._require_control("set_camera_params")
+        body: dict[str, Any] = {}
+        if gain is not None:
+            body["gain"] = gain
+        if exposure_micro_sec is not None:
+            body["exposureMicroSec"] = exposure_micro_sec
+        if saturation is not None:
+            body["saturation"] = saturation
+        if not body:
+            raise StellinaCommandError("set_camera_params: nothing to change")
+        return await self.post(const.Endpoint.SET_USER_PARAMS, body)
+
+    async def set_multi_light(self, enabled: bool) -> dict[str, Any]:
+        """Toggle Multi-Light (CovalENS / HDR background; firmware >= 2.28).
+
+        Merges the current settings so other settings aren't reset.
+        """
+        self._require_control("set_multi_light")
+        current = (self.status.raw.get("settings") or {}) if self.status else {}
+        keep = ("telescopeName", "storageFileCategories", "enableLiveFocus",
+                "enableFullResolution", "enableDithering")  # fmt: skip
+        body = {k: current[k] for k in keep if k in current}
+        body["enableHdrBackground"] = enabled
+        return await self.post(const.Endpoint.SET_SETTINGS, body)
+
+    async def save_observation(self) -> dict[str, Any]:
+        """ "Save": mark the current capture resumable so it's kept in the stored-captures library."""
+        self._require_control("save_observation")
+        return await self.post(const.Endpoint.SET_TO_BE_RESUMABLE)
+
     # -- live observation / images ------------------------------------------------------
     def current_observation(self) -> ObservationProgress | None:
         """Parsed progress of the current observation (target, step, stacking), or None."""

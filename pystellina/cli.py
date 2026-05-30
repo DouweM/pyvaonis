@@ -84,6 +84,39 @@ def stop(ip: str = const.DEFAULT_IP) -> None:
 
 
 @app.command()
+def reframe(x: int, y: int, rot: float = 0.0, ip: str = const.DEFAULT_IP) -> None:
+    """Change framing: nudge by x/y integer offsets, --rot degrees (takes control)."""
+    _print(_run(_with_client(ip, True, lambda s: s.adjust_framing(x, y, rot))))
+
+
+@app.command()
+def restart_autofocus(no_restart_capture: bool = False, ip: str = const.DEFAULT_IP) -> None:
+    """Re-run deep-sky autofocus (also restarts the stack unless --no-restart-capture)."""
+    _print(
+        _run(
+            _with_client(
+                ip, True, lambda s: s.restart_autofocus(restart_capture=not no_restart_capture)
+            )
+        )
+    )
+
+
+@app.command()
+def multi_light(
+    on: bool = typer.Option(..., "--on/--off", help="enable/disable Multi-Light (HDR)"),
+    ip: str = const.DEFAULT_IP,
+) -> None:
+    """Toggle Multi-Light / CovalENS HDR background (firmware >= 2.28)."""
+    _print(_run(_with_client(ip, True, lambda s: s.set_multi_light(on))))
+
+
+@app.command()
+def save(ip: str = const.DEFAULT_IP) -> None:
+    """Save the current capture to the stored-captures library (makes it resumable)."""
+    _print(_run(_with_client(ip, True, lambda s: s.save_observation())))
+
+
+@app.command()
 def shutdown(
     ip: str = const.DEFAULT_IP,
     yes: bool = typer.Option(False, "--yes", help="confirm: powers off the scope; drops the link"),

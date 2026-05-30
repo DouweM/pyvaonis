@@ -53,6 +53,7 @@ class Endpoint:
     REQUEST_SHUTDOWN: Final = "board/requestShutdown"
     EXPORT_TIFF: Final = "capture/exportImageTiff"
     EXPORT_JPEGXL: Final = "capture/exportImageJpegXl"  # GET ?captureId=
+    SET_TO_BE_RESUMABLE: Final = "capture/setToBeResumable"  # "Save" — persist current stack
     GENERATE_DARK: Final = "darkManager/generateDark"
     STOP_GENERATE_DARK: Final = "darkManager/stopGenerateDark"
     START_PLAN: Final = "planner/startPlan"
