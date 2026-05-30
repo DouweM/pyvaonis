@@ -395,9 +395,14 @@ which NATs LAN→Stellina (the default direction, so no custom firewall rules).
 3. **UDM → static route:** `10.0.0.0/24` → next hop `10.3.142.50`. That's the whole bridge — your
    network now reaches `10.0.0.1` via the Mango, which NATs to the Stellina. All three services work
    over the route (no per-port forwarding).
-4. **FTP (saved library)** is passive-mode: enable the Mango's FTP conntrack helper
-   (`opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`). pyvaonis already ignores the scope's
-   advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`); REST (8082) / socket (8083) need nothing.
+4. **FTP (saved library)** usually needs nothing extra here: pyvaonis uses passive mode and ignores
+   the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`), so the data connection is just
+   another routed+masqueraded outbound connection — REST (8082) / socket (8083) likewise. **Only if
+   `vaonis library` stalls** (control connects, data never opens) enable the Mango's FTP conntrack
+   helper: `opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`, then on firmware 3.x set
+   `net.netfilter.nf_conntrack_helper=1` (sysctl, persist in `/etc/sysctl.conf`) or on firmware 4.x
+   add an `ftp` CT helper in `/etc/config/firewall`; `/etc/init.d/firewall restart`. (The helper only
+   matters for DNAT/port-forward or active FTP — not this route-based path.)
 5. Point HA / pyvaonis at **`10.0.0.1`** (`VAONIS_HOST=10.0.0.1`). Test with `vaonis doctor` then
    `vaonis watch`.
 

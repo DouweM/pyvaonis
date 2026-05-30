@@ -33,8 +33,10 @@ Scope is AP-only → needs a Wi-Fi bridge. Plan: GL.iNet **GL-MT300N-V2 "Mango"*
 joins the Stellina AP (Stellina = Mango's WAN/`wwan`, 10.0.0.x). The Mango's **LAN (Ethernet)** gets a
 **static IP on the oasys IoT VLAN (10.3.142.50/24), DHCP off**, plugged into a UDM IoT port. **UDM
 static route 10.0.0.0/24 → 10.3.142.50**; the Mango NATs LAN→Stellina (default), so all ports route
-(no per-port forward). HA is on the services VLAN (10.3.127.x). FTP needs the Mango's conntrack FTP
-helper. Repeater **auto-reconnects** when the scope powers on (~1-2 min warm-up; no API trigger); the
+(no per-port forward). HA is on the services VLAN (10.3.127.x). FTP usually works as-is on this route
+path (passive + skip-pasv-ip); only enable the Mango FTP conntrack helper if `vaonis library` stalls
+(it's really needed for the port-forward/DNAT variant). Repeater **auto-reconnects** when the scope
+powers on (~1-2 min warm-up; no API trigger); the
 Mango stays up on Ethernet meanwhile. Full recipe in `README.md` → "Wi-Fi bridge". (User is buying the
 Mango.)
 
