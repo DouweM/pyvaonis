@@ -233,7 +233,7 @@ test unit (captures are served over HTTP `/files/...`).
 - **Save** → `POST capture/setToBeResumable` — persists the current stack to the on-telescope stored-captures library (distinct from `capture/exportImageTiff|JpegXl` full-res export, and from the app's save-to-gallery/cloud which is just a download/upload).
 - **Live camera tuning** → `POST general/setUserParams` `{gain, exposureMicroSec, saturation, MAP}`.
 
-`pystellina`: `adjust_framing`, `restart_autofocus`, `set_multi_light`, `save_observation`, `set_camera_params`.
+`pystellina`: `adjust_framing`, `restart_autofocus`, `set_multi_light`, `enable_multi_night`, `set_camera_params`.
 
 ## Catalog & browsing (offline-first — for a web UI)
 

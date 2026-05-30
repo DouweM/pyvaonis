@@ -43,6 +43,23 @@ BINARY_SENSORS: tuple[StellinaBinaryDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.client.has_control,
     ),
+    StellinaBinaryDescription(
+        key="tracking",
+        translation_key="tracking",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: any(
+            (m or {}).get("state") == "TRACKING"
+            for m in ((c.data.raw.get("motors") or {}).values() if c.data else [])
+        ),
+    ),
+    StellinaBinaryDescription(
+        key="defog",
+        translation_key="defog",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: (
+            (c.data.raw.get("sensors") or {}).get("defogStatus", "OFF") != "OFF" if c.data else None
+        ),
+    ),
 )
 
 

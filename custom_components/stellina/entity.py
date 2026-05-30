@@ -34,11 +34,17 @@ class StellinaEntity(CoordinatorEntity[StellinaCoordinator]):
     def device_info(self) -> DeviceInfo:
         """Describe the telescope as a single HA device."""
         status = self.coordinator.data
+        name = MODEL
+        sw_version = None
+        if status:
+            name = (status.raw.get("settings") or {}).get("telescopeName") or MODEL
+            sw_version = status.raw.get("version")
         return DeviceInfo(
             identifiers={(DOMAIN, self._telescope_id)},
             manufacturer=MANUFACTURER,
             model=(status.model if status and status.model else MODEL),
-            name=MODEL,
+            name=name,
+            sw_version=sw_version,
         )
 
     def _status_value(self, *path: str) -> Any:

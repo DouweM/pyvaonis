@@ -62,3 +62,21 @@ run_plan:
 stop_plan:
   name: Stop observing plan
   description: Cancel a running plan and stop the current observation.
+
+observe:
+  name: Observe object
+  description: Take control and slew to a catalog object, then start imaging.
+  fields:
+    target:
+      name: Target
+      description: Catalog id, designation, or name (e.g. M42, "Orion Nebula", Jupiter).
+      required: true
+      example: "M42"
+      selector:
+        text:
+    allow_solar:
+      name: Allow solar
+      description: Permit Sun/near-Sun targets (only with the Vaonis solar filter installed).
+      default: false
+      selector:
+        boolean:

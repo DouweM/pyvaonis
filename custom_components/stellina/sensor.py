@@ -64,6 +64,37 @@ def _integration(coordinator: StellinaCoordinator) -> Any:
     return round(obs.integration_seconds) if obs and obs.integration_seconds else None
 
 
+def _total_stacking(coordinator: StellinaCoordinator) -> Any:
+    obs = coordinator.client.current_observation()
+    return obs.total_stacking_count if obs else None
+
+
+def _raw(*path: str) -> Any:
+    def getter(coordinator: StellinaCoordinator) -> Any:
+        node: Any = coordinator.data.raw if coordinator.data else {}
+        for key in path:
+            if not isinstance(node, dict):
+                return None
+            node = node.get(key)
+        return node
+
+    return getter
+
+
+def _storage_free_mb(coordinator: StellinaCoordinator) -> Any:
+    avail = _raw("storage", "data", "available")(coordinator)
+    return round(avail / 1000) if isinstance(avail, int | float) else None
+
+
+def _controlling_device(coordinator: StellinaCoordinator) -> Any:
+    raw = coordinator.data.raw if coordinator.data else {}
+    master = raw.get("masterDeviceId")
+    for dev in raw.get("connectedDevices") or []:
+        if dev.get("id") == master:
+            return dev.get("name") or master
+    return master
+
+
 SENSORS: tuple[StellinaSensorDescription, ...] = (
     StellinaSensorDescription(
         key="temperature",
@@ -118,6 +149,48 @@ SENSORS: tuple[StellinaSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_integration,
+    ),
+    StellinaSensorDescription(
+        key="total_stacking",
+        translation_key="total_stacking",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_total_stacking,
+    ),
+    StellinaSensorDescription(
+        key="storage_free",
+        translation_key="storage_free",
+        native_unit_of_measurement="MB",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_storage_free_mb,
+    ),
+    StellinaSensorDescription(
+        key="band",
+        translation_key="band",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_raw("network", "band"),
+    ),
+    StellinaSensorDescription(
+        key="filter",
+        translation_key="filter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_raw("filter"),
+    ),
+    StellinaSensorDescription(
+        key="autofocus_temperature",
+        translation_key="autofocus_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_raw("autofocusTemperature"),
+    ),
+    StellinaSensorDescription(
+        key="controlling_device",
+        translation_key="controlling_device",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_controlling_device,
     ),
 )
 

@@ -29,11 +29,16 @@ PLATFORMS: list[Platform] = [
     Platform.CAMERA,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 SERVICE_EXPORT_CAPTURE = "export_capture"
 SERVICE_RUN_PLAN = "run_plan"
 SERVICE_STOP_PLAN = "stop_plan"
+SERVICE_OBSERVE = "observe"
+OBSERVE_SCHEMA = vol.Schema(
+    {vol.Required("target"): str, vol.Optional("allow_solar", default=False): bool}
+)
 EXPORT_SCHEMA = vol.Schema(
     {
         vol.Optional("capture_id"): str,
@@ -169,3 +174,11 @@ def _register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(DOMAIN, SERVICE_STOP_PLAN, stop_plan)
+
+    async def observe(call: ServiceCall) -> None:
+        """Slew to a catalog object (by id/name/designation) and start imaging."""
+        await _first_coordinator().client.observe_object(
+            call.data["target"], allow_solar=call.data["allow_solar"]
+        )
+
+    hass.services.async_register(DOMAIN, SERVICE_OBSERVE, observe, schema=OBSERVE_SCHEMA)

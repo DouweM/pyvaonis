@@ -413,6 +413,8 @@ class StellinaClient:
     async def adjust_framing(self, x: int, y: int, rot: float = 0.0) -> dict[str, Any]:
         """Nudge the live framing — ``x``/``y`` integer offsets, ``rot`` in degrees."""
         self._require_control("adjust_framing")
+        if self.current_observation() is None:
+            raise StellinaCommandError("adjust_framing: no observation in progress")
         return await self.post(const.Endpoint.ADJUST_FRAMING, {"x": x, "y": y, "rot": rot})
 
     async def restart_autofocus(self, *, restart_capture: bool = True) -> dict[str, Any]:
@@ -447,15 +449,22 @@ class StellinaClient:
         """
         self._require_control("set_multi_light")
         current = (self.status.raw.get("settings") or {}) if self.status else {}
-        keep = ("telescopeName", "storageFileCategories", "enableLiveFocus",
-                "enableFullResolution", "enableDithering")  # fmt: skip
+        # Echo back all known settings (setSettings may replace, not merge) + the toggle.
+        keep = ("telescopeName", "storageFileCategories", "usbFileTypes", "enableLiveFocus",
+                "enableFullResolution", "enableDithering", "enableDarkUsage", "algoHdrBackground",
+                "buttonBrightness")  # fmt: skip
         body = {k: current[k] for k in keep if k in current}
         body["enableHdrBackground"] = enabled
         return await self.post(const.Endpoint.SET_SETTINGS, body)
 
-    async def save_observation(self) -> dict[str, Any]:
-        """ "Save": mark the current capture resumable so it's kept in the stored-captures library."""
-        self._require_control("save_observation")
+    async def enable_multi_night(self) -> dict[str, Any]:
+        """Enable "multi-night": keep the current stack in the telescope's stored-captures library
+        so it can resume integrating on a later night (``capture/setToBeResumable``).
+
+        NB: the app's "Save to phone/Singularity" buttons are image download/cloud-upload (app-side),
+        not this telescope flag.
+        """
+        self._require_control("enable_multi_night")
         return await self.post(const.Endpoint.SET_TO_BE_RESUMABLE)
 
     # -- live observation / images ------------------------------------------------------

@@ -111,9 +111,12 @@ def multi_light(
 
 
 @app.command()
-def save(ip: str = const.DEFAULT_IP) -> None:
-    """Save the current capture to the stored-captures library (makes it resumable)."""
-    _print(_run(_with_client(ip, True, lambda s: s.save_observation())))
+def enable_multi_night(ip: str = const.DEFAULT_IP) -> None:
+    """Enable multi-night: keep the current stack so it can resume on a later night.
+
+    (The app's "Save to phone/Singularity" is an image download/cloud upload, not this.)
+    """
+    _print(_run(_with_client(ip, True, lambda s: s.enable_multi_night())))
 
 
 @app.command()

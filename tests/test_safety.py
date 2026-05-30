@@ -102,7 +102,7 @@ async def test_in_observation_actions_require_control_and_build_bodies() -> None
     with pytest.raises(StellinaCommandError, match="control"):
         await blocked.adjust_framing(1, 2)
 
-    c = _client()  # we are master
+    c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})  # master, observing
     seen: dict[str, Any] = {}
 
     async def fake_post(endpoint: str, body: Any = None, **k: Any) -> dict[str, Any]:
@@ -126,7 +126,7 @@ async def test_in_observation_actions_require_control_and_build_bodies() -> None
     assert seen["endpoint"] == "app/setSettings"
     assert seen["body"] == {"enableHdrBackground": True}  # no other settings in test status
 
-    await c.save_observation()
+    await c.enable_multi_night()
     assert seen["endpoint"] == "capture/setToBeResumable"
 
 

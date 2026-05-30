@@ -305,20 +305,23 @@ then add the *Stellina* integration and set the host (default `10.0.0.1`). The i
 `manifest.json` requires `pystellina[astro]` from PyPI — publish it (CI does this on a `v*` tag) or
 `pip install` it into the HA venv for local dev.
 
-**Entities & services:**
-- Sensors: battery, current operation, **current target**, **current step**, **stacked frames**,
-  **integration time**.
+**Entities & services** (device shows model + firmware version):
+- Sensors: current operation / **target** / **step**, **stacked frames** + **total**, **integration
+  time**, **temperature**, **humidity**, **dew-point depression**, **storage free**, **Wi-Fi band**,
+  **filter**, **autofocus temperature**, **controlling device**.
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
-  `sun_altitude`, `dark_start`, `dark_end` attributes).
-- Buttons: take control, park, stop, shut down.
+  `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**.
+- Buttons: take control, **release control**, park, stop, **restart autofocus**, **enable
+  multi-night**, shut down.
+- Switch: **Multi-Light (HDR)** (CovalENS).
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting starts
   the observation. `suggestions` attribute carries name/altitude/magnitude/constellation/description.
 - Camera: **Live view** of the current stacked frame.
 - Media source: **Stellina** in the HA media browser — *Recent captures* (live) and *Saved library*
-  (FTP), streamed through HA via a proxy view ([`http.py`](custom_components/stellina/http.py)).
-- Services: **`stellina.export_capture`** (saves a full-res image under the HA media directory) and
-  **`stellina.run_plan`** / **`stellina.stop_plan`** — run/cancel an unattended night in the
-  background, self-gated on darkness and (optional `max_cloud`) the cloud forecast.
+  (FTP `/system/captures`), streamed through HA via a proxy view.
+- Services: **`stellina.observe`** (slew to any catalog object), **`stellina.run_plan`** /
+  **`stellina.stop_plan`** (run/cancel an unattended night), **`stellina.export_capture`** (save a
+  full-res image to the HA media dir).
 
 HA (or whatever runs it) must be able to reach `10.0.0.1` — see the bridge below.
 

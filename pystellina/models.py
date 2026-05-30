@@ -13,21 +13,10 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
-# Per-mode operation objects in the status JSON; a non-stopped one means the scope is busy.
-_OPERATION_KEYS = (
-    "currentObservationOperation",
-    "currentAutoInitOperation",
-    "currentParkOperation",
-    "currentOpenOperation",
-    "currentDarkCalibrationOperation",
-    "currentPlanOperation",
-    "currentPlaylistOperation",
-    "currentStorageAcquisitionOperation",
-    "currentSunModeOperation",
-    "currentSunObservationOperation",
-    "currentDeleteFoldersOperation",
-    "currentOperation",
-)
+# In the real status JSON the only top-level operation key is `currentOperation` (single,
+# polymorphic by `type`); the per-mode names are derived in-app, never present as JSON keys.
+# A non-stopped `currentOperation` means the scope is busy (matches the app's canStartOperation).
+_OPERATION_KEYS = ("currentOperation",)
 
 
 class StellinaStatus(BaseModel):

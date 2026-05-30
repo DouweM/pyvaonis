@@ -23,8 +23,14 @@
       "target": { "name": "Current target" },
       "step": { "name": "Current step" },
       "stacking_count": { "name": "Stacked frames" },
+      "total_stacking": { "name": "Total stacked frames" },
       "integration": { "name": "Integration time" },
-      "dewpoint_depression": { "name": "Dew point depression" }
+      "dewpoint_depression": { "name": "Dew point depression" },
+      "storage_free": { "name": "Storage free" },
+      "band": { "name": "Wi-Fi band" },
+      "filter": { "name": "Filter" },
+      "autofocus_temperature": { "name": "Autofocus temperature" },
+      "controlling_device": { "name": "Controlling device" }
     },
     "camera": {
       "live": { "name": "Live view" }
@@ -32,16 +38,24 @@
     "binary_sensor": {
       "initialized": { "name": "Initialized" },
       "has_control": { "name": "Has control" },
-      "dark": { "name": "Dark enough to observe" }
+      "dark": { "name": "Dark enough to observe" },
+      "tracking": { "name": "Tracking" },
+      "defog": { "name": "Defog active" }
     },
     "button": {
       "take_control": { "name": "Take control" },
       "park": { "name": "Park" },
       "stop": { "name": "Stop observation" },
-      "shutdown": { "name": "Shut down" }
+      "shutdown": { "name": "Shut down" },
+      "release_control": { "name": "Release control" },
+      "restart_autofocus": { "name": "Restart autofocus" },
+      "enable_multi_night": { "name": "Enable multi-night" }
     },
     "select": {
       "target": { "name": "Tonight's target" }
+    },
+    "switch": {
+      "multi_light": { "name": "Multi-Light (HDR)" }
     }
   }
 }

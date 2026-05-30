@@ -330,7 +330,7 @@ guards above.
 | `app/setSettings` | `set_multi_light` |
 | `capture/exportImageTiff` | `export_url` / `export_capture` |
 | `capture/exportImageJpegXl` | `export_url` / `export_capture` |
-| `capture/setToBeResumable` | `save_observation` |
+| `capture/setToBeResumable` | `enable_multi_night` |
 | `network/switchFrequency` | `switch_frequency` |
 | `board/requestShutdown` | `request_shutdown` |
 

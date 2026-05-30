@@ -46,6 +46,21 @@ BUTTONS: tuple[StellinaButtonDescription, ...] = (
         translation_key="shutdown",
         press_fn=lambda client: client.request_shutdown(),
     ),
+    StellinaButtonDescription(
+        key="release_control",
+        translation_key="release_control",
+        press_fn=lambda client: client.release_control(),
+    ),
+    StellinaButtonDescription(
+        key="restart_autofocus",
+        translation_key="restart_autofocus",
+        press_fn=lambda client: client.restart_autofocus(),
+    ),
+    StellinaButtonDescription(
+        key="enable_multi_night",
+        translation_key="enable_multi_night",
+        press_fn=lambda client: client.enable_multi_night(),
+    ),
 )
 
 
