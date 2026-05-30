@@ -21,3 +21,44 @@ export_capture:
           options:
             - tiff
             - jxl
+
+run_plan:
+  name: Run observing plan
+  description: >-
+    Run an unattended plan in the background: observe each target for its minutes, then park
+    (and optionally shut down). Waits for darkness if asked. Gate on weather in the automation
+    that calls this (e.g. condition on weather.microclimate), not here.
+  fields:
+    targets:
+      name: Targets
+      description: List of "name:minutes" (minutes optional, default 20), e.g. "M42:30".
+      required: true
+      example: ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
+      selector:
+        object:
+    wait_for_dark:
+      name: Wait for dark
+      description: Wait until the Sun is below -10° before starting.
+      default: true
+      selector:
+        boolean:
+    require_dark:
+      name: Require dark
+      description: Stop the plan once the Sun rises above -10°.
+      default: true
+      selector:
+        boolean:
+    park:
+      name: Park at end
+      default: true
+      selector:
+        boolean:
+    shutdown:
+      name: Shut down at end
+      default: false
+      selector:
+        boolean:
+
+stop_plan:
+  name: Stop observing plan
+  description: Cancel a running plan and stop the current observation.

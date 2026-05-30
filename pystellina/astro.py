@@ -168,3 +168,14 @@ def solar_system_altitude(
     when = when or datetime.now(UTC)
     ra, dec = solar_system_radec(name, when)
     return equatorial_altitude(ra, dec, latitude, longitude, when)
+
+
+def moon_illumination(when: datetime | None = None) -> float:
+    """Illuminated fraction of the Moon's disk, 0.0-1.0 (requires ``ephem``).
+
+    A bright Moon washes out faint deep-sky targets, so this feeds the observing verdict.
+    """
+    ephem = _require_ephem()
+    moon = ephem.Moon()
+    moon.compute((when or datetime.now(UTC)).astimezone(UTC))
+    return float(moon.moon_phase)

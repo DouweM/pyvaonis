@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import functools
+import logging
 import os
+from contextlib import suppress
 from pathlib import Path
 
 import voluptuous as vol
@@ -19,6 +21,8 @@ from .coordinator import StellinaConfigEntry
 from .coordinator import StellinaCoordinator
 from .http import register_view
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
@@ -28,12 +32,27 @@ PLATFORMS: list[Platform] = [
 ]
 
 SERVICE_EXPORT_CAPTURE = "export_capture"
+SERVICE_RUN_PLAN = "run_plan"
+SERVICE_STOP_PLAN = "stop_plan"
 EXPORT_SCHEMA = vol.Schema(
     {
         vol.Optional("capture_id"): str,
         vol.Optional("format", default="tiff"): vol.In(["tiff", "jxl"]),
     }
 )
+RUN_PLAN_SCHEMA = vol.Schema(
+    {
+        vol.Required("targets"): [str],  # e.g. ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
+        vol.Optional("wait_for_dark", default=True): bool,
+        vol.Optional("require_dark", default=True): bool,
+        vol.Optional("park", default=True): bool,
+        vol.Optional("shutdown", default=False): bool,
+    }
+)
+# Weather/dew/rain gating is intentionally NOT done here — gate the automation that calls this
+# on your own HA entities (e.g. weather.microclimate condition + humidity), which are better
+# calibrated for your site than any generic forecast. `stellina forecast` (CLI) keeps a
+# standalone Open-Meteo check for off-grid use without Home Assistant.
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: StellinaConfigEntry) -> bool:
@@ -92,3 +111,61 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=EXPORT_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
+
+    def _first_coordinator() -> StellinaCoordinator:
+        entries = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+        ]
+        if not entries:
+            raise HomeAssistantError("No Stellina telescope is set up")
+        return entries[0].runtime_data
+
+    async def run_plan(call: ServiceCall) -> ServiceResponse:
+        """Run an unattended observing plan in the background (gate weather in the automation)."""
+        from pystellina import SequenceItem
+        from pystellina import run_sequence
+
+        coordinator = _first_coordinator()
+        if coordinator.plan_task is not None and not coordinator.plan_task.done():
+            raise HomeAssistantError("a plan is already running (call stellina.stop_plan first)")
+        lat, lon = hass.config.latitude, hass.config.longitude
+        items = [SequenceItem.parse(t) for t in call.data["targets"]]
+
+        async def _runner() -> None:
+            try:
+                await run_sequence(
+                    coordinator.client,
+                    items,
+                    latitude=lat,
+                    longitude=lon,
+                    require_dark=call.data["require_dark"],
+                    wait_for_dark=call.data["wait_for_dark"],
+                    park_at_end=call.data["park"],
+                    shutdown_at_end=call.data["shutdown"],
+                    on_event=lambda e: _LOGGER.info("plan %s %s %s", e.kind, e.item, e.detail),
+                )
+            except Exception:
+                _LOGGER.exception("Stellina plan failed")
+
+        coordinator.plan_task = hass.async_create_background_task(_runner(), "stellina_plan")
+        return {"started": True, "targets": call.data["targets"]}
+
+    async def stop_plan(call: ServiceCall) -> None:
+        """Cancel a running plan and stop the current observation."""
+        coordinator = _first_coordinator()
+        if coordinator.plan_task is not None:
+            coordinator.plan_task.cancel()
+            coordinator.plan_task = None
+        with suppress(Exception):
+            await coordinator.client.stop_observation()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RUN_PLAN,
+        run_plan,
+        schema=RUN_PLAN_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(DOMAIN, SERVICE_STOP_PLAN, stop_plan)

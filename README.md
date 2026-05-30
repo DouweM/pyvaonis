@@ -47,6 +47,7 @@ developer/agent reference.
 - **Live imaging**: read the progressively-stacked frame, current target/step, stacking count and
   integration time; download the current frame.
 - **Sequences**: run an unattended plan ("observe these N targets, then park & shut down").
+- **Weather**: a cloud-cover forecast + Moon → "is tonight worth it?" verdict (Open-Meteo, no key).
 - **Export & archive**: render full-res TIFF / JPEG-XL of a capture; browse & download the saved
   image library over FTP.
 - **Home Assistant**: sensors, binary sensors (incl. "dark enough"), buttons, a "Tonight's
@@ -113,6 +114,7 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 | `observing` | Current observation: target, step, stacking count, integration |
 | `image [--out f.jpg]` | Download the current live-stacked frame |
 | `tonight LAT LON [--require-dark] [--min-grade G] [--limit N]` | Ranked visible objects + dark window |
+| `forecast LAT LON` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
 | `info OBJECT` | Full catalog detail (name, description, magnitude, …) for an object |
 | `observe-object OBJECT` | Slew to a catalog object (e.g. `M42`, `"Orion Nebula"`, `Jupiter`) |
 | `observe [--object-name … --ra … --de …]` | Slew to explicit coordinates |
@@ -213,6 +215,72 @@ await run_sequence(
 )
 ```
 
+## Weather & full automation
+
+**Is tonight worth imaging?** Two paths, depending on whether you're running under Home Assistant:
+
+- **Off-grid (laptop on the scope's Wi-Fi, no HA):** `stellina forecast` / `pystellina.weather.assess_night()`
+  pulls a cloud-cover forecast from Open-Meteo (free, no key — its low/mid/high layers are what matter
+  for astro), looks only at tonight's dark window, folds in the Moon (via `ephem`), and gives a
+  `good`/`marginal`/`poor` verdict:
+
+  ```bash
+  stellina forecast 52.37 4.90
+  # dark window 00:57-01:57 UTC
+  # verdict: GOOD — clear: ~0% mean cloud (max 0%); bright Moon up (98%) — hurts faint deep-sky
+  ```
+
+- **In Home Assistant: gate on your own weather entity** (don't duplicate it here). If you run the
+  [microclimate](https://github.com/DouweM/ha-microclimate) integration, `weather.microclimate` is a
+  calibrated ensemble forecast for your exact site plus live PWS conditions (humidity → dew, wind,
+  precipitation, `condition`) — far better than a generic API call. `stellina.run_plan` deliberately
+  does **no** weather gating; you gate the automation that calls it (see below).
+
+**Can the whole night run unattended?** Almost entirely — with one hardware caveat:
+
+> ⚠️ **The API can only *shut down*, never power *on*.** Re-powering the board needs the physical
+> button. For true turn-on automation, put the scope on a **smart plug** (if it boots when power is
+> applied) and have your automation switch it on at dusk; otherwise leave it powered and use `park`
+> between nights instead of `shutdown`.
+
+Everything else is automatable. The **`stellina.run_plan`** service runs a whole night in the
+background and self-gates on darkness; you put the **weather/dew go-no-go in the automation's
+conditions** using your own entities, so one daily automation suffices:
+
+```yaml
+automation:
+  - alias: Stellina – image on clear nights
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: "01:00:00"            # an hour after sunset
+    condition:
+      # gate on YOUR calibrated weather entity, not a generic API
+      - condition: state
+        entity_id: weather.microclimate
+        state: ["sunny", "clear-night", "partlycloudy"]
+      - condition: numeric_state
+        entity_id: weather.microclimate
+        attribute: humidity
+        below: 90                     # dew risk on the optics
+    action:
+      # (optional) power the scope via a smart plug, then wait for it to boot
+      - service: switch.turn_on
+        target: { entity_id: switch.stellina_power }
+      - delay: "00:02:00"
+      - service: stellina.run_plan
+        data:
+          targets: ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
+          wait_for_dark: true          # waits until the Sun is below -10°
+          park: true
+          shutdown: true               # safe: it stops + parks + waits for idle first
+      # (optional) cut power after it shuts down
+```
+
+`stellina.run_plan` returns immediately (`{started: true}`); `stellina.stop_plan` cancels a running
+plan. The same plan is available standalone from the CLI:
+`stellina sequence M42:30 M51:20 … LAT LON --wait-for-dark --shutdown`.
+
 ## Full-res export & saved library
 
 - **Export** a finished capture at full resolution: `capture/exportImageTiff` (TIFF) or
@@ -244,8 +312,9 @@ then add the *Stellina* integration and set the host (default `10.0.0.1`). The i
 - Camera: **Live view** of the current stacked frame.
 - Media source: **Stellina** in the HA media browser — *Recent captures* (live) and *Saved library*
   (FTP), streamed through HA via a proxy view ([`http.py`](custom_components/stellina/http.py)).
-- Service: **`stellina.export_capture`** (`capture_id` optional → current; `format` tiff/jxl) — saves
-  a full-res image under the HA media directory and returns its path.
+- Services: **`stellina.export_capture`** (saves a full-res image under the HA media directory) and
+  **`stellina.run_plan`** / **`stellina.stop_plan`** — run/cancel an unattended night in the
+  background, self-gated on darkness and (optional `max_cloud`) the cloud forecast.
 
 HA (or whatever runs it) must be able to reach `10.0.0.1` — see the bridge below.
 
@@ -307,7 +376,9 @@ pystellina/                 # the library (flat layout)
   astro.py                  # sun position, is_dark, observing_window, ephemerides
   observation.py            # ObservationProgress, LiveImage, recent_images
   sequence.py               # run_sequence (unattended plans)
+  weather.py                # cloud forecast (Open-Meteo) + Moon -> night verdict
   ftp.py                    # saved-library browse/download
+  _eio3.py                  # minimal Engine.IO v3 / Socket.IO v2 websocket client
   cli.py                    # Typer CLI (entry point `stellina`)
   data/catalog.json         # bundled object catalog (regenerate via tools/)
 custom_components/stellina/ # HACS integration wrapping pystellina

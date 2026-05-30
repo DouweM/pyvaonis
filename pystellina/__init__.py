@@ -26,6 +26,9 @@ from .observation import ObservationProgress
 from .sequence import SequenceEvent
 from .sequence import SequenceItem
 from .sequence import run_sequence
+from .weather import NightConditions
+from .weather import assess_night
+from .weather import cloud_forecast
 
 __all__ = [
     "BAND_2_4_GHZ",
@@ -34,6 +37,7 @@ __all__ = [
     "CatalogObject",
     "FtpEntry",
     "LiveImage",
+    "NightConditions",
     "ObservationBody",
     "ObservationProgress",
     "SequenceEvent",
@@ -44,7 +48,9 @@ __all__ = [
     "StellinaError",
     "StellinaStatus",
     "VisibleObject",
+    "assess_night",
     "build_auth_header",
+    "cloud_forecast",
     "get_object",
     "is_dark",
     "load_catalog",

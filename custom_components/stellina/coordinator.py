@@ -7,6 +7,7 @@ control, and pushes each incoming status into Home Assistant via
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -38,6 +39,7 @@ class StellinaCoordinator(DataUpdateCoordinator[StellinaStatus]):
             session=async_get_clientsession(hass),
         )
         self.client.on_status(self._handle_status)
+        self.plan_task: asyncio.Task[None] | None = None
 
     def _handle_status(self, status: StellinaStatus) -> None:
         """Receive a pushed status from the telescope."""

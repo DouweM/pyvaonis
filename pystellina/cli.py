@@ -180,6 +180,22 @@ def tonight(
 
 
 @app.command()
+def forecast(lat: float, lon: float) -> None:
+    """Is tonight worth imaging? Cloud forecast over the dark window + Moon (no telescope)."""
+    from .weather import assess_night
+
+    night = _run(assess_night(lat, lon))
+    if night.dark_start and night.dark_end:
+        typer.echo(f"dark window {night.dark_start:%H:%M}-{night.dark_end:%H:%M} UTC")
+    typer.echo(f"verdict: {night.verdict.upper()} — {night.reason}")
+    for h in night.hours or []:
+        layers = (
+            f"low {h.cloud_low or 0:.0f} mid {h.cloud_mid or 0:.0f} high {h.cloud_high or 0:.0f}"
+        )
+        typer.echo(f"  {h.time:%H:%M}Z  cloud {h.cloud_cover:3.0f}%  ({layers})")
+
+
+@app.command()
 def info(object_id: str) -> None:
     """Show full catalog detail for an object (offline)."""
     from .catalog import get_object
