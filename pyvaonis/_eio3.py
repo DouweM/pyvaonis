@@ -117,7 +117,7 @@ class EngineIO3Client:
             while True:
                 msg = await self._ws.receive()
                 if msg.type != aiohttp.WSMsgType.TEXT:
-                    raise StellinaSocketError(f"unexpected handshake frame: {msg.type}")
+                    raise VaonisSocketError(f"unexpected handshake frame: {msg.type}")
                 kind, payload = decode_frame(msg.data)
                 _LOGGER.debug("eio3 handshake recv %s: %.200s", kind, msg.data)
                 if kind == "open":
@@ -131,7 +131,7 @@ class EngineIO3Client:
     async def emit(self, event: str, *args: Any) -> None:
         """Emit a Socket.IO event on the default namespace."""
         if self._ws is None or self._ws.closed:
-            raise StellinaSocketError("socket not connected")
+            raise VaonisSocketError("socket not connected")
         await self._ws.send_str(encode_event(event, list(args)))
 
     async def disconnect(self) -> None:
@@ -184,5 +184,5 @@ class EngineIO3Client:
             await result
 
 
-class StellinaSocketError(Exception):
+class VaonisSocketError(Exception):
     """Engine.IO/Socket.IO transport error."""

@@ -12,38 +12,38 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import StellinaConfigEntry
-from .coordinator import StellinaCoordinator
-from .entity import StellinaEntity
+from .coordinator import VaonisConfigEntry
+from .coordinator import VaonisCoordinator
+from .entity import VaonisEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class StellinaBinaryDescription(BinarySensorEntityDescription):
+class VaonisBinaryDescription(BinarySensorEntityDescription):
     """Binary sensor description with a value extractor."""
 
-    value_fn: Callable[[StellinaCoordinator], bool | None]
+    value_fn: Callable[[VaonisCoordinator], bool | None]
 
 
-BINARY_SENSORS: tuple[StellinaBinaryDescription, ...] = (
-    StellinaBinaryDescription(
+BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
+    VaonisBinaryDescription(
         key="connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.client.connected,
     ),
-    StellinaBinaryDescription(
+    VaonisBinaryDescription(
         key="initialized",
         translation_key="initialized",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.data.initialized if c.data else None,
     ),
-    StellinaBinaryDescription(
+    VaonisBinaryDescription(
         key="has_control",
         translation_key="has_control",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.client.has_control,
     ),
-    StellinaBinaryDescription(
+    VaonisBinaryDescription(
         key="tracking",
         translation_key="tracking",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -52,7 +52,7 @@ BINARY_SENSORS: tuple[StellinaBinaryDescription, ...] = (
             for m in ((c.data.raw.get("motors") or {}).values() if c.data else [])
         ),
     ),
-    StellinaBinaryDescription(
+    VaonisBinaryDescription(
         key="defog",
         translation_key="defog",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -60,7 +60,7 @@ BINARY_SENSORS: tuple[StellinaBinaryDescription, ...] = (
             (c.data.raw.get("sensors") or {}).get("defogStatus", "OFF") != "OFF" if c.data else None
         ),
     ),
-    StellinaBinaryDescription(
+    VaonisBinaryDescription(
         key="update_available",
         translation_key="update_available",
         device_class=BinarySensorDeviceClass.UPDATE,
@@ -81,25 +81,25 @@ def _update_available(update: dict[str, object]) -> bool | None:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: StellinaConfigEntry,
+    entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Stellina binary sensors."""
     coordinator = entry.runtime_data
     entities: list[BinarySensorEntity] = [
-        StellinaBinarySensor(coordinator, description) for description in BINARY_SENSORS
+        VaonisBinarySensor(coordinator, description) for description in BINARY_SENSORS
     ]
-    entities.append(StellinaDarkSensor(coordinator, hass))
+    entities.append(VaonisDarkSensor(coordinator, hass))
     async_add_entities(entities)
 
 
-class StellinaBinarySensor(StellinaEntity, BinarySensorEntity):
+class VaonisBinarySensor(VaonisEntity, BinarySensorEntity):
     """A Stellina binary status sensor."""
 
-    entity_description: StellinaBinaryDescription
+    entity_description: VaonisBinaryDescription
 
     def __init__(
-        self, coordinator: StellinaCoordinator, description: StellinaBinaryDescription
+        self, coordinator: VaonisCoordinator, description: VaonisBinaryDescription
     ) -> None:
         """Initialise the binary sensor."""
         super().__init__(coordinator, description.key)
@@ -111,12 +111,12 @@ class StellinaBinarySensor(StellinaEntity, BinarySensorEntity):
         return self.entity_description.value_fn(self.coordinator)
 
 
-class StellinaDarkSensor(StellinaEntity, BinarySensorEntity):
+class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
     """Whether it's dark enough to observe (Sun below -10deg), matching the app."""
 
     _attr_translation_key = "dark"
 
-    def __init__(self, coordinator: StellinaCoordinator, hass: HomeAssistant) -> None:
+    def __init__(self, coordinator: VaonisCoordinator, hass: HomeAssistant) -> None:
         """Initialise the darkness sensor."""
         super().__init__(coordinator, "dark")
         self._hass = hass
@@ -124,15 +124,15 @@ class StellinaDarkSensor(StellinaEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """True when observing is possible (it is dark)."""
-        from pystellina import is_dark
+        from pyvaonis import is_dark
 
         return is_dark(self._hass.config.latitude, self._hass.config.longitude)
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Expose the Sun altitude and tonight's dark window."""
-        from pystellina import observing_window
-        from pystellina import sun_altitude
+        from pyvaonis import observing_window
+        from pyvaonis import sun_altitude
 
         lat, lon = self._hass.config.latitude, self._hass.config.longitude
         window = observing_window(lat, lon)

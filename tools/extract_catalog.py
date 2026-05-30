@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate ``pystellina/data/catalog.json`` from a Singularity APK.
+"""Regenerate ``pyvaonis/data/catalog.json`` from a Singularity APK.
 
 The bundled catalog is the factual subset (designations, coordinates, magnitude, recommended
 capture settings, and the object's name/description) of the app's catalog.
@@ -30,7 +30,7 @@ KEEP = [
     "distance", "distanceUnit", "realSize", "realSizeUnit", "discoveredBy", "discoveredIn",
 ]  # fmt: skip
 
-OUT = Path(__file__).resolve().parent.parent / "pystellina" / "data" / "catalog.json"
+OUT = Path(__file__).resolve().parent.parent / "pyvaonis" / "data" / "catalog.json"
 
 
 def _unescape(s: str) -> str:

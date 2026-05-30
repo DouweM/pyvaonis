@@ -1,7 +1,7 @@
-"""Command-line interface: ``stellina <command>``.
+"""Command-line interface: ``vaonis <command>``.
 
-Run on a machine joined to the telescope's ``STELLINA-xxxx`` Wi-Fi (or reachable
-through a bridge). Requires the ``cli`` extra: ``pip install "pystellina[cli]"``.
+Run on a machine joined to the telescope's Wi-Fi (e.g. ``STELLINA-xxxx`` / ``Vespera-xxxx``), or
+reachable through a bridge. Requires the ``cli`` extra: ``pip install "pyvaonis[cli]"``.
 """
 
 from __future__ import annotations
@@ -16,12 +16,12 @@ from typing import Any
 import typer
 
 from . import const
-from .client import StellinaClient
-from .client import StellinaError
+from .client import VaonisClient
+from .client import VaonisError
 from .models import ObservationBody
 
 app = typer.Typer(
-    help="Control a Vaonis Stellina over its local Wi-Fi.",
+    help="Control a Vaonis smart telescope over its local Wi-Fi.",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -33,8 +33,8 @@ PANEL_PLAN = "Planning (offline, no telescope)"
 PANEL_DEBUG = "Status & debug"
 
 # Defaults from the environment so you don't retype them (and to dodge the negative-longitude
-# argument-parsing footgun): set STELLINA_HOST / STELLINA_LAT / STELLINA_LON once.
-DEFAULT_IP = os.environ.get("STELLINA_HOST", const.DEFAULT_IP)
+# argument-parsing footgun): set VAONIS_HOST / VAONIS_LAT / VAONIS_LON once.
+DEFAULT_IP = os.environ.get("VAONIS_HOST", const.DEFAULT_IP)
 _DEBUG = False
 
 
@@ -44,12 +44,12 @@ def _main(
         False, "--debug", help="Log wire traffic and show full tracebacks on error."
     ),
 ) -> None:
-    """Stellina CLI."""
+    """Vaonis CLI."""
     global _DEBUG
     _DEBUG = debug
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
-        for name in ("pystellina", "aiohttp", "asyncio"):
+        for name in ("pyvaonis", "aiohttp", "asyncio"):
             logging.getLogger(name).setLevel(logging.DEBUG)
 
 
@@ -61,7 +61,7 @@ def _run(coro: Any) -> Any:
     """
     try:
         return asyncio.run(coro)
-    except StellinaError as err:
+    except VaonisError as err:
         if _DEBUG:
             raise
         typer.secho(f"error: {err}", fg=typer.colors.RED, err=True)
@@ -69,7 +69,7 @@ def _run(coro: Any) -> Any:
 
 
 async def _with_client(ip: str, control: bool, fn: Any) -> Any:
-    async with StellinaClient(ip=ip) as scope:
+    async with VaonisClient(ip=ip) as scope:
         if control:
             await scope.take_control()
         return await fn(scope)
@@ -83,15 +83,15 @@ def _location(
     use_scope: bool = False,
     fallback: tuple[float, float] | None = None,
 ) -> tuple[float, float]:
-    """Resolve a location: CLI args → STELLINA_LAT/LON env → ``fallback`` → (if ``use_scope``) the scope.
+    """Resolve a location: CLI args → VAONIS_LAT/LON env → ``fallback`` → (if ``use_scope``) the scope.
 
     The scope reports its own GPS/observatory position in ``status.position``, so for commands that
     can reach it you don't need to supply a location at all. ``fallback`` lets an already-connected
     command pass that position without opening a second connection.
     """
-    if lat is None and (env := os.environ.get("STELLINA_LAT")):
+    if lat is None and (env := os.environ.get("VAONIS_LAT")):
         lat = float(env)
-    if lon is None and (env := os.environ.get("STELLINA_LON")):
+    if lon is None and (env := os.environ.get("VAONIS_LON")):
         lon = float(env)
     if lat is not None and lon is not None:
         return lat, lon
@@ -101,11 +101,11 @@ def _location(
         try:
 
             async def _fetch() -> tuple[tuple[float, float] | None, str | None]:
-                async with StellinaClient(ip=ip) as scope:
+                async with VaonisClient(ip=ip) as scope:
                     return scope.location(), scope.observatory_name()
 
             pos, observatory = asyncio.run(_fetch())
-        except StellinaError:
+        except VaonisError:
             pos, observatory = None, None
         if pos is not None:
             where = f"observatory {observatory!r}" if observatory else "telescope"
@@ -116,7 +116,7 @@ def _location(
             )
             return pos
     raise typer.BadParameter(
-        "no location: pass LAT LON, set STELLINA_LAT / STELLINA_LON, "
+        "no location: pass LAT LON, set VAONIS_LAT / VAONIS_LON, "
         "or connect to the telescope (it knows its own position)"
     )
 
@@ -158,7 +158,7 @@ def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
     """Stream raw socket events (use to confirm event names / payloads)."""
 
     async def _watch() -> None:
-        scope = StellinaClient(ip=ip)
+        scope = VaonisClient(ip=ip)
 
         async def _dump(event: str, *args: Any) -> None:
             typer.echo(f"[{event}] {json.dumps(args, default=str)[:400]}")
@@ -181,7 +181,7 @@ def park(ip: str = DEFAULT_IP) -> None:
 def stop(ip: str = DEFAULT_IP) -> None:
     """Stop whatever is running — a native plan if one is active, else the current observation."""
 
-    async def _go(s: StellinaClient) -> Any:
+    async def _go(s: VaonisClient) -> Any:
         if s.plan_progress() is not None:
             return await s.stop_plan()
         return await s.stop_observation()
@@ -252,8 +252,8 @@ def shutdown(
 
 @app.command(rich_help_panel=PANEL_CONTROL)
 def autoinit(
-    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT)"),
-    lon: float | None = typer.Argument(None, help="longitude (default: $STELLINA_LON)"),
+    lat: float | None = typer.Argument(None, help="latitude (default: $VAONIS_LAT)"),
+    lon: float | None = typer.Argument(None, help="longitude (default: $VAONIS_LON)"),
     ip: str = DEFAULT_IP,
     skip_autofocus: bool = False,
 ) -> None:
@@ -294,7 +294,7 @@ def observe(
     """
     if target:
 
-        async def _go(s: StellinaClient) -> Any:
+        async def _go(s: VaonisClient) -> Any:
             return await s.observe_object(target, replace=replace, allow_solar=allow_solar)
     elif ra is not None and de is not None:
         body = ObservationBody(
@@ -308,7 +308,7 @@ def observe(
             do_stacking=False,
         )
 
-        async def _go(s: StellinaClient) -> Any:
+        async def _go(s: VaonisClient) -> Any:
             return await s.start_observation(body, replace=replace, allow_solar=allow_solar)
     else:
         raise typer.BadParameter("give a catalog TARGET, or both --ra and --de for a manual target")
@@ -318,10 +318,8 @@ def observe(
 
 @app.command(rich_help_panel=PANEL_PLAN)
 def tonight(
-    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
-    lon: float | None = typer.Argument(
-        None, help="longitude (default: $STELLINA_LON or the scope)"
-    ),
+    lat: float | None = typer.Argument(None, help="latitude (default: $VAONIS_LAT or the scope)"),
+    lon: float | None = typer.Argument(None, help="longitude (default: $VAONIS_LON or the scope)"),
     min_altitude: float = 15.0,
     min_grade: float = 0.0,
     limit: int = 20,
@@ -338,7 +336,7 @@ def tonight(
     By default reports each object's peak altitude over tonight's dark window and when it peaks
     (local time), including targets that haven't risen yet — because "tonight" means the whole
     night, not this instant. Pass --now for a snapshot of what's above the horizon right now (with
-    optional --require-dark to gate on darkness). Location comes from LAT/LON, else $STELLINA_LAT/LON,
+    optional --require-dark to gate on darkness). Location comes from LAT/LON, else $VAONIS_LAT/LON,
     else the connected telescope's own position.
     """
     from .astro import is_dark
@@ -395,15 +393,13 @@ def tonight(
 
 @app.command(rich_help_panel=PANEL_PLAN)
 def forecast(
-    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
-    lon: float | None = typer.Argument(
-        None, help="longitude (default: $STELLINA_LON or the scope)"
-    ),
+    lat: float | None = typer.Argument(None, help="latitude (default: $VAONIS_LAT or the scope)"),
+    lon: float | None = typer.Argument(None, help="longitude (default: $VAONIS_LON or the scope)"),
     ip: str = DEFAULT_IP,
 ) -> None:
     """Is tonight worth imaging? Cloud forecast over the dark window + Moon (needs internet).
 
-    Location comes from LAT/LON, else $STELLINA_LAT/LON, else the connected telescope's position.
+    Location comes from LAT/LON, else $VAONIS_LAT/LON, else the connected telescope's position.
     """
     from .weather import assess_night
 
@@ -463,7 +459,7 @@ def info(
 def observing(ip: str = DEFAULT_IP) -> None:
     """Show what the scope is doing now (human status + observation/plan detail), read-only."""
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         return await _ret(
             (scope.status_summary(), scope.current_observation(), scope.plan_progress())
         )
@@ -482,7 +478,7 @@ def observing(ip: str = DEFAULT_IP) -> None:
 def _slugify(name: str) -> str:
     """Filesystem-safe token from an object name (e.g. 'Sombrero Galaxy' -> 'Sombrero_Galaxy')."""
     keep = "".join(c if c.isalnum() or c in "-_" else "_" for c in name).strip("_")
-    return keep or "stellina"
+    return keep or "vaonis"
 
 
 @app.command(rich_help_panel=PANEL_LIVE)
@@ -503,13 +499,13 @@ def image(
     """Download the latest stacked frame (read-only; SAFE during an observation).
 
     While observing, grabs the current live frame; when idle, falls back to the most recent finished
-    run's last frame (use `stellina recent` to see runs, `stellina library`/`download` for older
+    run's last frame (use `vaonis recent` to see runs, `vaonis library`/`download` for older
     ones). The frame is already on the scope's disk, so by default (`--fast`) we download that file
     directly — instant. `--rendered` re-renders via the firmware (slow; current frame only). Default
     filename is the object + frame index (e.g. M104_0042.jpg), so repeated runs don't overwrite.
     """
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         img = scope.current_image()
         obs = scope.current_observation()
         live = img is not None
@@ -517,7 +513,7 @@ def image(
             recent_frames = scope.recent_images()
             img = recent_frames[0] if recent_frames else None
         if img is None:
-            return None, "stellina.jpg"
+            return None, "vaonis.jpg"
         if rendered and live and img.capture_id:
             scope.request_timeout = timeout
             data = await scope.fetch_image(
@@ -541,7 +537,7 @@ def image(
 def _run_label(url_path: str) -> str:
     """Derive a run label from an image path, e.g. .../captures/<storeId>/images/IMG.jpg -> storeId."""
     parts = [p for p in url_path.split("/") if p]
-    return parts[-3] if len(parts) >= 3 else "stellina"
+    return parts[-3] if len(parts) >= 3 else "vaonis"
 
 
 @app.command(rich_help_panel=PANEL_LIVE)
@@ -549,13 +545,13 @@ def recent(limit: int = 15, ip: str = DEFAULT_IP) -> None:
     """List recent capture runs stored on the telescope (newest first), read-only.
 
     Each run is a folder under the scope's library; download a frame with
-    `stellina download <path>` or browse with `stellina library <path>`.
+    `vaonis download <path>` or browse with `vaonis library <path>`.
     """
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         runs: list[Any] = []
         for root in (const.FTP_ROOT, "/system/plan"):
-            with contextlib.suppress(StellinaError):
+            with contextlib.suppress(VaonisError):
                 runs += [e for e in await scope.library(root) if e.is_dir]
         return runs
 
@@ -586,7 +582,7 @@ def export(
     default --timeout is generous. The default 20s client timeout is why a plain export "hangs".
     """
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         scope.request_timeout = timeout  # the render (POST) + download both use this
         return await scope.export_capture(capture_id, format)
 
@@ -607,7 +603,7 @@ def library(
 ) -> None:
     """List the saved-image library over FTP (no control needed)."""
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         return await scope.library(path)
 
     entries = _run(_with_client(ip, False, _go))
@@ -624,7 +620,7 @@ def download(path: str, out: str = "", ip: str = DEFAULT_IP) -> None:
     """Download a saved file from the library by its FTP path."""
     import os
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         return await scope.download_file(path)
 
     data = _run(_with_client(ip, False, _go))
@@ -639,7 +635,7 @@ def plan(
     targets: list[str],
     lat: float | None = typer.Option(None, "--lat", help="latitude (default: env or the scope)"),
     lon: float | None = typer.Option(None, "--lon", help="longitude (default: env or the scope)"),
-    name: str = "pystellina plan",
+    name: str = "pyvaonis plan",
     wait_for_dark: bool = typer.Option(
         False, "--wait-for-dark", help="schedule the plan to start at the next dusk (Sun < -10°)"
     ),
@@ -650,8 +646,8 @@ def plan(
 
     [IDLE ONLY.] Uploads one Plan-My-Night (`planner/startPlan`) and returns: the firmware then
     auto-initialises and runs every target on schedule by itself, so you can disconnect. Watch it
-    with `stellina observing`; cancel with `stellina stop-plan`. Location comes from --lat/--lon,
-    else $STELLINA_LAT/LON, else the scope's own position. NB: the native plan parks at the end on
+    with `vaonis observing`; cancel with `vaonis stop-plan`. Location comes from --lat/--lon,
+    else $VAONIS_LAT/LON, else the scope's own position. NB: the native plan parks at the end on
     its own but has no power-off step — leave a session connected if you want `shutdown`.
     """
     from datetime import UTC
@@ -663,7 +659,7 @@ def plan(
 
     items = [PlanItem.parse(t) for t in targets]
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         la, lo = _location(lat, lon, fallback=scope.location())  # CLI > env > scope's own position
         start_time: datetime | None = None
         if start_in:
@@ -671,7 +667,7 @@ def plan(
         elif wait_for_dark:
             window = observing_window(la, lo)
             if window is None:
-                raise StellinaError("no dark window in the next 24h; refusing to schedule")
+                raise VaonisError("no dark window in the next 24h; refusing to schedule")
             start_time = max(window[0], datetime.now(UTC))
         when = f" starting {start_time:%H:%M}Z" if start_time else " now"
         typer.echo(f"uploading plan {name!r} ({len(items)} targets){when}…")
@@ -714,9 +710,9 @@ def api(
     Firmware upload is always blocked; delete/reset/solar endpoints need --unsafe.
 
     Examples:
-      stellina api app/status
-      stellina api general/park -X POST
-      stellina api general/setUserParams -f gain=20 -f exposureMicroSec=10000000
+      vaonis api app/status
+      vaonis api general/park -X POST
+      vaonis api general/setUserParams -f gain=20 -f exposureMicroSec=10000000
     """
     body: dict[str, Any] | None = None
     if data:
@@ -731,7 +727,7 @@ def api(
                 body[key] = value
     verb = method.upper() or ("POST" if body is not None else "GET")
 
-    async def _go(scope: StellinaClient) -> Any:
+    async def _go(scope: VaonisClient) -> Any:
         if control and verb != "GET":
             await scope.take_control()
         return await scope.call(verb, endpoint, body, allow_unsafe=unsafe)
@@ -758,7 +754,7 @@ def doctor(ip: str = DEFAULT_IP) -> None:
         return ""
 
     async def _sio() -> str:
-        client = StellinaClient(ip=ip)
+        client = VaonisClient(ip=ip)
         try:
             await client.connect(status_timeout=15)
             ok = client.status is not None and client.status.can_authenticate
@@ -811,7 +807,7 @@ def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = DEFAULT_IP) -> None:
             results.append((name, status, detail))
             typer.echo(f"[{status}] {name}" + (f" — {detail}" if detail else ""))
 
-        client = StellinaClient(ip=ip)
+        client = VaonisClient(ip=ip)
         required_failed = 0
         try:
             try:

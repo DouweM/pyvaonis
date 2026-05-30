@@ -12,57 +12,57 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from pystellina import StellinaClient
-from pystellina import StellinaError
+from pyvaonis import VaonisClient
+from pyvaonis import VaonisError
 
-from .coordinator import StellinaConfigEntry
-from .coordinator import StellinaCoordinator
-from .entity import StellinaEntity
+from .coordinator import VaonisConfigEntry
+from .coordinator import VaonisCoordinator
+from .entity import VaonisEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class StellinaButtonDescription(ButtonEntityDescription):
+class VaonisButtonDescription(ButtonEntityDescription):
     """Button description bound to a client coroutine."""
 
-    press_fn: Callable[[StellinaClient], Awaitable[object]]
+    press_fn: Callable[[VaonisClient], Awaitable[object]]
     # Most actions need control; take it on demand first. False for the control buttons themselves.
     takes_control: bool = True
 
 
-BUTTONS: tuple[StellinaButtonDescription, ...] = (
-    StellinaButtonDescription(
+BUTTONS: tuple[VaonisButtonDescription, ...] = (
+    VaonisButtonDescription(
         key="take_control",
         translation_key="take_control",
         press_fn=lambda client: client.take_control(),
         takes_control=False,
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="park",
         translation_key="park",
         press_fn=lambda client: client.park(),
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="stop",
         translation_key="stop",
         press_fn=lambda client: client.stop_observation(),
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="shutdown",
         translation_key="shutdown",
         press_fn=lambda client: client.request_shutdown(),
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="release_control",
         translation_key="release_control",
         press_fn=lambda client: client.release_control(),
         takes_control=False,
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="restart_autofocus",
         translation_key="restart_autofocus",
         press_fn=lambda client: client.restart_autofocus(),
     ),
-    StellinaButtonDescription(
+    VaonisButtonDescription(
         key="enable_multi_night",
         translation_key="enable_multi_night",
         press_fn=lambda client: client.enable_multi_night(),
@@ -72,21 +72,21 @@ BUTTONS: tuple[StellinaButtonDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: StellinaConfigEntry,
+    entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Stellina buttons."""
     coordinator = entry.runtime_data
-    async_add_entities(StellinaButton(coordinator, description) for description in BUTTONS)
+    async_add_entities(VaonisButton(coordinator, description) for description in BUTTONS)
 
 
-class StellinaButton(StellinaEntity, ButtonEntity):
+class VaonisButton(VaonisEntity, ButtonEntity):
     """A Stellina command button."""
 
-    entity_description: StellinaButtonDescription
+    entity_description: VaonisButtonDescription
 
     def __init__(
-        self, coordinator: StellinaCoordinator, description: StellinaButtonDescription
+        self, coordinator: VaonisCoordinator, description: VaonisButtonDescription
     ) -> None:
         """Initialise the button."""
         super().__init__(coordinator, description.key)
@@ -104,5 +104,5 @@ class StellinaButton(StellinaEntity, ButtonEntity):
                 await self.coordinator.run_action(press_fn)
             else:
                 await press_fn(self.coordinator.client)
-        except StellinaError as err:
+        except VaonisError as err:
             raise HomeAssistantError(str(err)) from err

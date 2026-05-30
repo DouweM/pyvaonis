@@ -8,26 +8,26 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import StellinaConfigEntry
-from .coordinator import StellinaCoordinator
-from .entity import StellinaEntity
+from .coordinator import VaonisConfigEntry
+from .coordinator import VaonisCoordinator
+from .entity import VaonisEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: StellinaConfigEntry,
+    entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Multi-Light switch."""
-    async_add_entities([StellinaMultiLightSwitch(entry.runtime_data)])
+    async_add_entities([VaonisMultiLightSwitch(entry.runtime_data)])
 
 
-class StellinaMultiLightSwitch(StellinaEntity, SwitchEntity):
+class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
     """Multi-Light (HDR background / CovalENS) — a persistent device setting."""
 
     _attr_translation_key = "multi_light"
 
-    def __init__(self, coordinator: StellinaCoordinator) -> None:
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the switch."""
         super().__init__(coordinator, "multi_light")
 

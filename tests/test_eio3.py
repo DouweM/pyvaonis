@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pystellina._eio3 import decode_frame
-from pystellina._eio3 import encode_event
+from pyvaonis._eio3 import decode_frame
+from pyvaonis._eio3 import encode_event
 
 
 def test_encode_event() -> None:

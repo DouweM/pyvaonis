@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import UTC
 from datetime import datetime
 
-from pystellina.catalog import get_object
-from pystellina.catalog import load_catalog
-from pystellina.catalog import visibility_rating
-from pystellina.catalog import visible_now
-from pystellina.catalog import visible_tonight
+from pyvaonis.catalog import get_object
+from pyvaonis.catalog import load_catalog
+from pyvaonis.catalog import visibility_rating
+from pyvaonis.catalog import visible_now
+from pyvaonis.catalog import visible_tonight
 
 
 def test_visibility_rating_thresholds() -> None:

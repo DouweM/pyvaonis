@@ -2,7 +2,7 @@
 
 The telescope pushes its full state as the socket.io **`STATUS_UPDATED`** event (a JSON object), and
 the same object is returned (wrapped as `{success, result: {...}}`) by `GET app/status`. Captured live
-from `stellina-f8bd80` while observing M104. `pystellina` keeps the whole thing in
+from `stellina-f8bd80` while observing M104. `pyvaonis` keeps the whole thing in
 `StellinaStatus.raw` and types only the fields it needs (`models.py`, `observation.py`).
 
 ## Top-level keys
@@ -52,7 +52,7 @@ from `stellina-f8bd80` while observing M104. `pystellina` keeps the whole thing 
 }
 ```
 Other `currentOperation.type` values seen: `AUTO_INIT` (with `astrometry`, `focusResult`, `armPosition`,
-`observatoryName`), `PARK`, `PLAN`. `pystellina.observation.ObservationProgress.from_status` only treats
+`observatoryName`), `PARK`, `PLAN`. `pyvaonis.observation.ObservationProgress.from_status` only treats
 `type=="OBSERVATION" && !stopped` as "observing".
 
 ### `capture`
@@ -95,7 +95,7 @@ Other `currentOperation.type` values seen: `AUTO_INIT` (with `astrometry`, `focu
 Keyed by type. `plan` → `{ planName, targets:[ { target, startTime, endTime,
 attempts:[ { observationId, lastImage:{ index, url:"/files/plans/.../IMG_NNNN.jpg", stackingCount, ... } } ] } ] }`.
 `autoInit` → plate-solve `astrometry {ra,de,rot}`, `focusResult {map, focusValue}`, `armPosition`,
-`observatoryName`. `pystellina.observation.recent_images` walks these for `lastImage` URLs.
+`observatoryName`. `pyvaonis.observation.recent_images` walks these for `lastImage` URLs.
 
 ## Auth fields
 `getAuthHeader()` uses `challenge`, `telescopeId`, `bootCount` from this object (PROTOCOL.md §3).
@@ -132,7 +132,7 @@ target + settings; `storeId` encodes date + object). Note `captureStore.storedCa
   is attached (it queries *user* storage, not `/system`). Use FTP for the internal library.
 - **`GET reporter/getAvailableReports` → `{result: []}`** when there are no pending reports.
 - `connectedDevices` accumulates stale entries (every distinct `deviceId` lingers); use a stable
-  `device_id` (pystellina derives one from the host MAC) to avoid piling up.
+  `device_id` (pyvaonis derives one from the host MAC) to avoid piling up.
 - Stacking acceptance is partial: e.g. M104 showed `stackingCount 180 / acquisitionCount 379`
   (≈half rejected, `StackingRoundnessError`) — normal in poor seeing/wind. `images[]` is sparse
   (not every index), so the latest frame is `images[-1]`, not `images[stackingCount-1]`.

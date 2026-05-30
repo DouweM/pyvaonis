@@ -1,7 +1,7 @@
 """Typed views over the telescope's status and request bodies.
 
-The status JSON (pushed over socket.io and parsed by the app into ``StellinaStatus``)
-is large and firmware-dependent, so :class:`StellinaStatus` keeps the full payload in
+The status JSON (pushed over socket.io and parsed by the app into ``VaonisStatus``)
+is large and firmware-dependent, so :class:`VaonisStatus` keeps the full payload in
 ``raw`` and only types the fields we rely on. ``extra="allow"`` keeps unknown fields.
 """
 
@@ -19,7 +19,7 @@ from pydantic import Field
 _OPERATION_KEYS = ("currentOperation",)
 
 
-class StellinaStatus(BaseModel):
+class VaonisStatus(BaseModel):
     """Subset of ``com.vaonis.instruments.sdk.models.status.StellinaStatus``."""
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
@@ -87,7 +87,7 @@ class AutoInitBody(BaseModel):
     longitude: float
     time: int  # epoch millis
     observatory_id: str = Field(default="", serialization_alias="observatoryId")
-    observatory_name: str = Field(default="pystellina", serialization_alias="observatoryName")
+    observatory_name: str = Field(default="pyvaonis", serialization_alias="observatoryName")
     skip_auto_focus: bool = Field(default=False, serialization_alias="skipAutoFocus")
 
 
@@ -172,7 +172,7 @@ class PlanBody(BaseModel):
     latitude: float
     longitude: float
     observatory_id: str = Field(default="", serialization_alias="observatoryId")
-    observatory_name: str = Field(default="pystellina", serialization_alias="observatoryName")
+    observatory_name: str = Field(default="pyvaonis", serialization_alias="observatoryName")
     user_id: int = Field(default=0, serialization_alias="userId")
     device_id: str = Field(serialization_alias="deviceId")
     app_version: str = Field(serialization_alias="appVersion")

@@ -39,8 +39,8 @@ DEFAULT_SOCKET_IO_PATH = "/socket.io"
 **Socket.IO v2 / Engine.IO protocol v3 (`EIO=3`)** — confirmed from the decompiled
 `StellinaSocketV2.connect()` (recovered via smali) and `io/socket/engineio/client/Socket.smali`,
 which hardcodes `EIO=3`. This matters: `python-socketio` 5.x / `python-engineio` 4.x speak only
-`EIO=4` and **cannot** connect (you get a link but never any events) — hence `pystellina` ships its
-own tiny EIO3 client (`pystellina/_eio3.py`).
+`EIO=4` and **cannot** connect (you get a link but never any events) — hence `pyvaonis` ships its
+own tiny EIO3 client (`pyvaonis/_eio3.py`).
 
 Connect: websocket to `ws://10.0.0.1:8083/socket.io/?EIO=3&transport=websocket&<query>`, default
 namespace, query `id=<deviceId>&name=<deviceName>&countryCode=<cc>`, connect timeout 8 s. Heartbeat
@@ -132,10 +132,10 @@ POST updates/uploadUpdateFile (multipart)   POST logs/consume
 
 ## Command safety (audited against the decompiled code)
 
-Risk classes for the 38 endpoints + socket emits, and how `pystellina` guards them:
+Risk classes for the 38 endpoints + socket emits, and how `pyvaonis` guards them:
 
 - **Brick (firmware):** `updates/uploadUpdateFile` — the only true brick vector. **Never callable**
-  in `pystellina` (hard-blocked in `request`/`call`, even with `allow_unsafe`).
+  in `pyvaonis` (hard-blocked in `request`/`call`, even with `allow_unsafe`).
 - **Irreversible (data/ownership):** `storage/deleteUserStorageFolders`,
   `captureStore/deleteStoredCapture`, `userManager/makeResetRequest` + `applyResetResponse`
   (control/owner reset). Refused unless `allow_unsafe=True` (CLI `--unsafe`).
@@ -147,11 +147,11 @@ Risk classes for the 38 endpoints + socket emits, and how `pystellina` guards th
 - **Control:** `takeControl` forcibly demotes the phone app (the firmware ignores the app's advisory
   `canTakeControl`); the phone can take it back, after which our signed commands start failing.
 
-Preconditions enforced by the app via `Instrument.can*` (mirrored in `pystellina`):
+Preconditions enforced by the app via `Instrument.can*` (mirrored in `pyvaonis`):
 `canSendRequest` = not `shuttingDown` + connected + **we are master** (`masterDeviceId == us`).
 `startObservation` additionally requires `initialized == true` and **no operation running**
 (`current*Operation` all stopped/absent). `park`/`openForMaintenance` require no running operation;
-`openForMaintenance` also requires `isParked`. `pystellina` refuses out-of-state commands and, in
+`openForMaintenance` also requires `isParked`. `pyvaonis` refuses out-of-state commands and, in
 `sequence`, waits for the scope to go idle before `park`/`requestShutdown`.
 
 ## 5. `StartObservationBody` (the "go observe target X" payload)
@@ -181,21 +181,21 @@ carries `idMessier`/`idNgc`/`idIc`, `magnitude`, a curated `grade` (0–10), rec
 needed to populate a `StartObservationBody`. Human **names + descriptions** live in compiled
 resources under string keys `objects_<id>_title` / `_description` (decode with apktool).
 "What to watch tonight" is just this list filtered by altitude for the user's location/time.
-`pystellina` bundles the factual subset (incl. names/descriptions) and computes visibility
-locally (`pystellina/catalog.py`); no Vaonis cloud/account is involved. (Cloud `Orion*` APIs
+`pyvaonis` bundles the factual subset (incl. names/descriptions) and computes visibility
+locally (`pyvaonis/catalog.py`); no Vaonis cloud/account is involved. (Cloud `Orion*` APIs
 exist for richer "Plan My Night", but aren't needed.)
 
 **Planets / Moon / Sun.** Supported, not special-cased away: `SolarSystemObjects` = sun,
 mercury, venus, moon, mars, jupiter, saturn, uranus, neptune. The app computes their positions
 with `com.vaonis.kaa.AAPlus` (a Java port of Meeus' *Astronomical Algorithms*) via
 `AstroLibBridge.getObjectElevation` / `equatorialCoordinatesFromSolarObject`, then starts a
-normal go-to with the computed RA/Dec. `pystellina` does the same via `ephem` (see
-`pystellina/astro.py`). Stellina's optics are deep-sky-optimised, so planets are tiny — that's
+normal go-to with the computed RA/Dec. `pyvaonis` does the same via `ephem` (see
+`pyvaonis/astro.py`). Stellina's optics are deep-sky-optimised, so planets are tiny — that's
 an *optical* limitation, not a software one.
 
 **Darkness / observing window.** The app defines night as **Sun altitude ≤ −10°**
 (`GetSunDetailLifetime.getSunset/getSunrise` walk minute-by-minute until `rint(sunAlt) == -10`).
-`pystellina.astro.is_dark` / `observing_window` reproduce this.
+`pyvaonis.astro.is_dark` / `observing_window` reproduce this.
 
 ### Live images & stacking (verified on firmware 2.35.7)
 
@@ -222,7 +222,7 @@ Other confirmed top-level status fields: `sensors { temperature, humidity, dewpo
 defogStatus }` (**no battery** — Stellina is mains/USB powered), `motors { AZ, ALT, DER, MAP →
 {position,state,calibrated} }`, `network { band, channel }`, `settings`, `storage`, `filter`,
 `masterDeviceId`, `connectedDevices[]`. `GET app/status` returns the same object wrapped as
-`{ success, result: {…} }`. `pystellina/observation.py` parses this; FTP `/user` was empty on the
+`{ success, result: {…} }`. `pyvaonis/observation.py` parses this; FTP `/user` was empty on the
 test unit (captures are served over HTTP `/files/...`).
 
 ### In-observation controls (the app's live buttons) — all implemented
@@ -233,7 +233,7 @@ test unit (captures are served over HTTP `/files/...`).
 - **Save** → `POST capture/setToBeResumable` — persists the current stack to the on-telescope stored-captures library (distinct from `capture/exportImageTiff|JpegXl` full-res export, and from the app's save-to-gallery/cloud which is just a download/upload).
 - **Live camera tuning** → `POST general/setUserParams` `{gain, exposureMicroSec, saturation, MAP}`.
 
-`pystellina`: `adjust_framing`, `restart_autofocus`, `set_multi_light`, `enable_multi_night`, `set_camera_params`.
+`pyvaonis`: `adjust_framing`, `restart_autofocus`, `set_multi_light`, `enable_multi_night`, `set_camera_params`.
 
 ## Catalog & browsing (offline-first — for a web UI)
 
@@ -267,9 +267,9 @@ through the bridge; (b) socket.io + FTP must pass through (FTP needs passive mod
 ## 7. Recommended build path → Home Assistant (HACS)
 
 1. **`stellina_cli.py`** (this repo) — validate the protocol on your laptop on the Stellina AP.
-2. Extract a small **async library** (`pystellina`): socket.io status stream + `auth_header()` +
+2. Extract a small **async library** (`pyvaonis`): socket.io status stream + `auth_header()` +
    typed REST calls. This is the reusable core.
-3. **HACS custom integration** wrapping `pystellina`:
+3. **HACS custom integration** wrapping `pyvaonis`:
    - config flow (host default `10.0.0.1`, deviceId); a `DataUpdateCoordinator` fed by the
      socket.io status stream (push, not poll);
    - entities: battery sensor, current-operation/state sensor, initialized/connected binary

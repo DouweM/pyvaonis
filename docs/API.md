@@ -1,4 +1,4 @@
-# Vaonis Stellina — Local API Reference
+# Vaonis — Local API Reference
 
 Complete, source-derived reference for the Stellina local control protocol. Everything here is
 reverse-engineered from **Singularity by Vaonis v1.38.10** (`com.vaonis.barnard`), specifically
@@ -11,7 +11,7 @@ the full status JSON schema see `docs/STATUS.md`.
 > - Request bodies: `src/sources/com/vaonis/instruments/sdk/models/body/**`
 > - Responses: `src/sources/com/vaonis/instruments/sdk/models/response/**`
 > - Socket: `src/sources/com/vaonis/instruments/sdk/socket/StellinaSocketV2.java` + `PROTOCOL.md` §2
-> - pystellina coverage: `pystellina/client.py`, `pystellina/const.py`
+> - pyvaonis coverage: `pyvaonis/client.py`, `pyvaonis/const.py`
 
 ---
 
@@ -27,12 +27,12 @@ mode exists in the API). Four services run on that host:
 | **HTTP image server** | `http://10.0.0.1:8082/files/...` | **none** | Captured/stacked JPEG frames, e.g. `/files/captures/<storeId>/images/IMG_0042.jpg?androidImageIndex=…&androidCaptureId=…` (query is cache-busting). |
 | **FTP (anonymous)** | `10.0.0.1:21` | none | Image library. Captures under `/system/captures` (also `bias`, `dark`, `history`, `logs`, `plan`, `reports`, `temp`); `/user` was empty on the test unit. |
 
-Connection constants (`StellinaContext.kt`, mirrored in `pystellina/const.py`):
+Connection constants (`StellinaContext.kt`, mirrored in `pyvaonis/const.py`):
 `DEFAULT_IP=10.0.0.1`, `DEFAULT_HTTP_PORT=8082`, `DEFAULT_SOCKET_PORT=8083`,
 `DEFAULT_SOCKET_IO_PATH=/socket.io`, `HTTP_ROOT=""`.
 
 Engine.IO v3 (`EIO=3`) is mandatory: `python-socketio`/`python-engineio` (EIO=4) **cannot** connect
-— pystellina ships its own EIO3 client (`pystellina/_eio3.py`). The socket query is
+— pyvaonis ships its own EIO3 client (`pyvaonis/_eio3.py`). The socket query is
 `id=<deviceId>&name=<deviceName>&countryCode=<cc>`. Heartbeat is **client-initiated** (client sends
 `2`, server replies `3`).
 
@@ -44,7 +44,7 @@ latest socket status, using a keypair embedded in the app. Because the `challeng
 every status push, a **fresh header is computed per request** — so you must have an active socket
 status (for `challenge` / `telescopeId` / `bootCount`) before any REST command will authenticate.
 Full derivation and the embedded keys are in **`PROTOCOL.md` §3**; the working implementation is
-`pystellina/auth.py` (`build_auth_header`). The header value is the literal string
+`pyvaonis/auth.py` (`build_auth_header`). The header value is the literal string
 `Basic android|<selector>|<base64(signed)>` (despite the prefix it is *not* HTTP Basic auth).
 
 ---
@@ -71,7 +71,7 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### general/ — lifecycle, pointing, imaging
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `general/startAutoInit` | `AutoInitBody { latitude:double, longitude:double, time:long (epoch ms), observatoryId:String, observatoryName:String, skipAutoFocus:boolean }` | OrderResponse | PHYSICAL/STATE | `start_autoinit()` |
 | POST | `general/stopAutoInit` | — | OrderResponse | STATE | `stop_autoinit()` |
@@ -85,7 +85,7 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### app/ — status & settings
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | GET | `app/status` | — | `StatusResponse { result:StellinaStatus, success:boolean }` | SAFE | `app_status()` |
 | POST | `app/setSettings` | `SettingsBody { usbFileTypes:List<String>, storageFileCategories:List<String>, telescopeName:String, enableLiveFocus:Boolean, enableFullResolution:Boolean, enableHdrBackground:Boolean, enableDarkUsage:Boolean, enableDithering:Boolean, algoHdrBackground:StellinaSettings.BalensMode, buttonBrightness:String }` | OrderResponse | STATE | `set_multi_light()` (toggles `enableHdrBackground`; echoes current settings) |
@@ -95,18 +95,18 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### capture/ — live frame / full-res export / save
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `capture/exportImageTiff` | `TiffBody { captureId:String }` | `TiffResponse { result:TiffData }` where `TiffData { savedOnUsbStorage:Boolean, stackingCount:Integer }` (+ `url` returned in result) | STATE | `export_url(fmt="tiff")` / `export_capture()` |
 | POST | `capture/exportImageJpegXl` | `@Query("captureId") String` (no body) | `CaptureJxlResponse { result:JXLData }` where `JXLData { image:StellinaCaptureImage, inAppJson:String, url:String }` | STATE | `export_url(fmt="jxl")` / `export_capture()` |
 | POST | `capture/setToBeResumable` | — | OrderResponse | STATE | `enable_multi_night()` |
 
-> pystellina treats `exportImageJpegXl` as a GET with `?captureId=` (`export_url`); the decompiled
+> pyvaonis treats `exportImageJpegXl` as a GET with `?captureId=` (`export_url`); the decompiled
 > interface annotates it `@POST` with a `@Query` param. Both forms reach the same handler in practice.
 
 ### captureStore/ — stored-capture library / resume
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | GET | `captureStore/getObservation` | `@Query("storeId") String` | `StoredObservationResponse { result:StellinaObservationOperation, success:boolean }` | SAFE | — |
 | POST | `captureStore/startObservationFromStoredCapture` | `StartObservationFromStoredCaptureBody { storeId:String }` | OrderResponse | PHYSICAL/STATE | — |
@@ -114,14 +114,14 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### darkManager/ — dark-frame generation
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `darkManager/generateDark` | — | OrderResponse | STATE | — (const `GENERATE_DARK`, no helper) |
 | POST | `darkManager/stopGenerateDark` | — | OrderResponse | STATE | — (const `STOP_GENERATE_DARK`, no helper) |
 
 ### planner/ — Plan My Night
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `planner/startPlan` | `PlanMyNightBody { planId:String, planVersion:String, planName:String, targets:List<PlanMyNightTargetBody>, latitude:double, longitude:double, observatoryId:String, observatoryName:String, userId:int, deviceId:String, appVersion:String }` — each `PlanMyNightTargetBody { startTime:long, endTime:long, storeId:String, params:StartObservationBody }` | OrderResponse | PHYSICAL/STATE | `start_plan()` (`PlanBody`/`PlanTargetBody`; `build_plan` lays out windows) |
 | POST | `planner/stopPlan` | — | OrderResponse | STATE | `stop_plan()` |
@@ -129,21 +129,21 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### playlist/ — observation playlists
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `playlist/startPlaylist` | `PlaylistBody { appVersion:String, deviceId:String, playlistType:StellinaPlaylistOperation.PlaylistType, targets:List<TargetsParam>, userId:Integer }` — each `TargetsParam { params:StartObservationBody }` | OrderResponse | PHYSICAL/STATE | — |
 | POST | `playlist/stopPlaylist` | — | OrderResponse | STATE | — |
 
 ### expertMode/ — raw storage acquisition (frame stacks to disk)
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `expertMode/startStorageAcquisition` | `StorageAcquisitionBody { path:String, overwrite:boolean, numExposures:int, gain:int, exposureMicroSec:int, flip:StellinaAcquisitionFlip (NO_FLIP \| FLIP \| BOTH) }` | OrderResponse | PHYSICAL/STATE | — |
 | POST | `expertMode/stopStorageAcquisition` | — | OrderResponse | STATE | — |
 
 ### sun/ — solar observation (filter required)
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `sun/startSunMode` | `SunModeBody { appVersion:String, deviceId:String, eclipse:boolean, latitude:double, longitude:double, observatoryId:String, observatoryName:String, skipAutoFocus:boolean, time:long (epoch ms), userId:Integer }` | OrderResponse | **SOLAR**/PHYSICAL | — (guarded) |
 | POST | `sun/handleUserAction` | `SunModeActionBody { action:StellinaSunModeAction, pov:StellinaSunModeOperation.StellinaSunModePov }` | OrderResponse | **SOLAR**/STATE | — (guarded) |
@@ -154,52 +154,52 @@ method body/path for them in this decompile; they are noted at the end of the ta
 
 ### storage/ — on-telescope user storage
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | GET | `storage/userStorageFolderContent` | `@Query("folderPath") String` | `FolderContentResponse { result:StellinaStorageFolderContent }` | SAFE | — |
 | POST | `storage/deleteUserStorageFolders` | `DeleteUserStorageFolderBody { folderPaths:List<String> }` | OrderResponse | DESTRUCTIVE | — (guarded) |
 
 ### network/ — Wi-Fi band
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `network/switchFrequency` | `NetworkBody { band:String ("BAND_2_4_GHZ" \| "BAND_5_GHZ") }` | `Unit` (empty) | DISCONNECT | `switch_frequency()` |
 
 ### board/ — power
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `board/requestShutdown` | — | OrderResponse | DISCONNECT | `request_shutdown()` |
 
 ### reporter/ — telemetry reports
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | GET | `reporter/getAvailableReports` | — | `ReportsResponse { result:List<StellinaReport> }` | SAFE | — |
 | POST | `reporter/markReportsAsSynced` | `ReportsBody { reports:List<Report> }` — each `Report { operationId:String, operationEnded:boolean }` | `Unit` (empty) | STATE | — |
 
 ### userManager/ — ownership / control reset
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `userManager/makeResetRequest` | — | `ResetCodeResponse { result:String }` | DESTRUCTIVE | — (guarded) |
 | POST | `userManager/applyResetResponse` | `RequestCodeBody { response:String }` | OrderResponse | DESTRUCTIVE | — (guarded) |
 
 ### updates/ — firmware
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `updates/uploadUpdateFile` | **Multipart**: `@Part MultipartBody.Part file`, `@Query("fileName") String`, `@Query("model") String` | `Call<ResponseBody>` (raw; not a coroutine) | **BRICK** | — (**hard-blocked**, never callable) |
 
 ### logs/ — log retrieval
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | POST | `logs/consume` | — | `LogResponse { file:String, result:Result { data:String, message:String }, success:boolean }` | SAFE | — |
 
 ### Image download (no base path)
 
-| Method | Path | Request body | Response | Risk | pystellina |
+| Method | Path | Request body | Response | Risk | pyvaonis |
 |--------|------|--------------|----------|------|------------|
 | GET (`@Streaming`) | `@Url <full url>` | — | `okhttp3.ResponseBody` (raw bytes) | SAFE | `fetch_image()` / `fetch_current_image()` / `download_file()` (via the `:8082/files` server, no auth) |
 
@@ -247,7 +247,7 @@ Moshi `@JsonClass(generateAdapter = true)`; JSON keys equal field names **except
 | `targetType` | enum `StellinaObservationOperation.ObservationTargetType` | `@Json(name="targetType")` |
 | `hdrBackground` | `HdrBackgroundBody { curve:int, polynomialOrder:int, ratioParam:double, ratioParamLocal:double, saturation:double, whiteMeanNoiseRatio:double }` | Multi-Light tuning params (the *toggle* is `app/setSettings.enableHdrBackground`) |
 
-pystellina builds this via `pystellina/models.py:ObservationBody` (`to_payload()`); see also
+pyvaonis builds this via `pyvaonis/models.py:ObservationBody` (`to_payload()`); see also
 `PROTOCOL.md` §5 for the catalog/ephemeris flow that populates it.
 
 ---
@@ -274,26 +274,26 @@ first. `connect`/`disconnect`/`reconnect`/`error` are transport lifecycle events
 | `setUserName` | `{ "device": <deviceId>, "user": <name \| "null"> }` | Label this client (shown in `connectedDevices`). |
 | `setSystemTime` | `<epochMillis>` | Set the telescope clock. |
 
-pystellina: `take_control()` (emits `takeControl` then `setUserName`), `release_control()`. The
+pyvaonis: `take_control()` (emits `takeControl` then `setUserName`), `release_control()`. The
 constant `setSystemTime` (`MSG_SET_SYSTEM_TIME`) is defined but no helper currently emits it.
 
 ---
 
 ## 5. Preconditions & safety guards
 
-Enforced by the app via `Instrument.can*` and mirrored in pystellina (`client.py`):
+Enforced by the app via `Instrument.can*` and mirrored in pyvaonis (`client.py`):
 
 - **`canSendRequest`** = not `shuttingDown` + connected + **we are master** (`masterDeviceId == us`).
-  pystellina: `_require_control()`.
+  pyvaonis: `_require_control()`.
 - **`startObservation`/`startAutoInit`** additionally require **no operation running**; observation
-  also requires `initialized == true`. pystellina: `_require_idle()` + `initialized` check + a
+  also requires `initialized == true`. pyvaonis: `_require_idle()` + `initialized` check + a
   `< SOLAR_EXCLUSION_DEG` (10°) Sun-proximity refusal unless `allow_solar=True`.
 - **`park`/`openForMaintenance`** require no running operation; `openForMaintenance` also requires
   `isParked`.
 - **`takeControl`** forcibly demotes the phone app (the firmware ignores the app's advisory
   `canTakeControl`); the phone can take it back, after which signed commands start failing.
 
-pystellina `_guard_endpoint()` classification (`const.py`):
+pyvaonis `_guard_endpoint()` classification (`const.py`):
 
 - **BRICK (hard-blocked, never callable even with `allow_unsafe`):** `updates/uploadUpdateFile`.
 - **DESTRUCTIVE (require `allow_unsafe=True`):** `storage/deleteUserStorageFolders`,
@@ -305,7 +305,7 @@ pystellina `_guard_endpoint()` classification (`const.py`):
 
 ---
 
-## 6. pystellina coverage summary
+## 6. pyvaonis coverage summary
 
 **15 of 42 endpoints** have dedicated high-level client methods. A further **5** have named
 constants in `const.py` but no convenience helper (`general/openForMaintenance`,
@@ -316,7 +316,7 @@ guards above.
 
 **Implemented (dedicated method):**
 
-| Endpoint | pystellina method |
+| Endpoint | pyvaonis method |
 |----------|-------------------|
 | `general/startAutoInit` | `start_autoinit` |
 | `general/stopAutoInit` | `stop_autoinit` |

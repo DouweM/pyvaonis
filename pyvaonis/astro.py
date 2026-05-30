@@ -7,7 +7,7 @@ The app treats the night as starting when the **Sun drops below -10° altitude**
 ``GetSunDetailLifetime`` in the decompiled app), so :func:`is_dark` matches that by default.
 
 Solar-system objects (planets/Moon/Sun) need ephemerides; those helpers require the
-optional ``ephem`` dependency (``pip install "pystellina[astro]"``).
+optional ``ephem`` dependency (``pip install "pyvaonis[astro]"``).
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ def _require_ephem():
         import ephem
     except ImportError as err:  # pragma: no cover - optional dependency
         raise RuntimeError(
-            "solar-system objects need the 'ephem' package: pip install 'pystellina[astro]'"
+            "solar-system objects need the 'ephem' package: pip install 'pyvaonis[astro]'"
         ) from err
     return ephem
 

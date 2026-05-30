@@ -1,4 +1,4 @@
-"""pystellina — async client + CLI for Vaonis Stellina smart telescopes."""
+"""pyvaonis — async client + CLI for Vaonis smart telescopes (Stellina, Vespera, …)."""
 
 from __future__ import annotations
 
@@ -12,17 +12,18 @@ from .catalog import get_object
 from .catalog import load_catalog
 from .catalog import visibility_rating
 from .catalog import visible_now
-from .client import StellinaClient
-from .client import StellinaCommandError
-from .client import StellinaConnectionError
-from .client import StellinaError
+from .client import VaonisClient
+from .client import VaonisCommandError
+from .client import VaonisConnectionError
+from .client import VaonisError
 from .const import BAND_2_4_GHZ
 from .const import BAND_5_GHZ
+from .const import model_display_name
 from .ftp import FtpEntry
 from .models import AutoInitBody
 from .models import ObservationBody
 from .models import PlanBody
-from .models import StellinaStatus
+from .models import VaonisStatus
 from .observation import LiveImage
 from .observation import ObservationProgress
 from .plan import PlanItem
@@ -45,11 +46,11 @@ __all__ = [
     "PlanBody",
     "PlanItem",
     "PlanProgress",
-    "StellinaClient",
-    "StellinaCommandError",
-    "StellinaConnectionError",
-    "StellinaError",
-    "StellinaStatus",
+    "VaonisClient",
+    "VaonisCommandError",
+    "VaonisConnectionError",
+    "VaonisError",
+    "VaonisStatus",
     "VisibleObject",
     "assess_night",
     "build_auth_header",
@@ -58,6 +59,7 @@ __all__ = [
     "get_object",
     "is_dark",
     "load_catalog",
+    "model_display_name",
     "observing_window",
     "sun_altitude",
     "visibility_rating",

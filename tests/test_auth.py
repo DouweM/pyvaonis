@@ -12,8 +12,8 @@ import hashlib
 
 from nacl.signing import VerifyKey
 
-from pystellina.auth import PUBLIC_KEY
-from pystellina.auth import build_auth_header
+from pyvaonis.auth import PUBLIC_KEY
+from pyvaonis.auth import build_auth_header
 
 # A plausible challenge: selector char "x" + base64 of 16 random-ish bytes.
 CHALLENGE = "x" + base64.b64encode(bytes(range(16))).decode()

@@ -11,6 +11,28 @@ from typing import Final
 DEFAULT_IP: Final = "10.0.0.1"
 # Echoed into request bodies that carry it (e.g. planner/startPlan appVersion); mirrors the app.
 APP_VERSION: Final = "1.38.10"
+
+# Friendly display names for the `model` field in status (the Singularity/Vaonis family). Only
+# Stellina is hardware-validated; the rest are recognised so the library/UI label them correctly.
+MODEL_NAMES: Final = {
+    "stellina": "Stellina",
+    "vespera": "Vespera",
+    "vespera1ed": "Vespera",
+    "vespera2": "Vespera II",
+    "vespera3": "Vespera III",
+    "vesperapro": "Vespera Pro",
+    "vesperapro2": "Vespera Pro 2",
+    "hyperia": "Hyperia",
+}
+
+
+def model_display_name(model: str | None) -> str:
+    """Human label for a status ``model`` value (e.g. 'vesperapro2' -> 'Vespera Pro 2')."""
+    if not model:
+        return "Vaonis telescope"
+    return MODEL_NAMES.get(model.lower(), model)
+
+
 HTTP_PORT: Final = 8082
 SOCKET_PORT: Final = 8083
 SOCKET_PATH: Final = "/socket.io"
@@ -66,7 +88,7 @@ class Endpoint:
 
 
 # Inbound socket.io event names (from decompiled StellinaSocketV2.connect, recovered via smali).
-EVENT_STATUS: Final = "STATUS_UPDATED"  # payload is the StellinaStatus JSON object
+EVENT_STATUS: Final = "STATUS_UPDATED"  # payload is the VaonisStatus JSON object
 EVENT_CONTROL_ERROR: Final = "CONTROL_ERROR"
 
 # socket.io control messages, emitted as emit("message", <key>[, <value>]).

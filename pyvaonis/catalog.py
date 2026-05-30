@@ -6,7 +6,7 @@ object, a human name + description, coordinates (RA/Dec, J2000), magnitude, a cu
 altitude (and optionally darkness) so callers can offer "tonight's targets".
 
 Fixed deep-sky objects use pure-Python geometry. Solar-system objects (planets/Moon/Sun)
-carry no stored coordinates — their positions are computed on demand via :mod:`pystellina.astro`,
+carry no stored coordinates — their positions are computed on demand via :mod:`pyvaonis.astro`,
 which needs the optional ``ephem`` dependency.
 """
 
@@ -153,7 +153,7 @@ class CatalogObject(BaseModel):
         params. Per-object histogram values from the catalog are used when present, else the app's
         per-type rule defaults. For solar objects the firmware resolves the coordinates itself, so —
         exactly as the app does — we send no RA/Dec/rot (the near-Sun safety guard runs in
-        :meth:`StellinaClient.observe_object`).
+        :meth:`VaonisClient.observe_object`).
         """
         if self.is_solar:  # planets/Moon/Sun: objectId + camera params, no coordinates, no stacking
             gain, exposure = _SOLAR_PARAMS_STELLINA.get(self.id.lower(), (self.gain, self.exposure))

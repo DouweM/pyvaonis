@@ -19,7 +19,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-URL = "/api/stellina_media/{entry_id}/{kind}/{ref}"
+URL = "/api/vaonis_media/{entry_id}/{kind}/{ref}"
 
 _MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".tif": "image/tiff", ".jxl": "image/jxl"}
 
@@ -32,15 +32,15 @@ def register_view(hass: HomeAssistant) -> None:
     """Register the proxy view once."""
     if hass.data.get(f"{DOMAIN}_view_registered"):
         return
-    hass.http.register_view(StellinaMediaView(hass))
+    hass.http.register_view(VaonisMediaView(hass))
     hass.data[f"{DOMAIN}_view_registered"] = True
 
 
-class StellinaMediaView(HomeAssistantView):
+class VaonisMediaView(HomeAssistantView):
     """Stream a telescope image (live HTTP frame or saved FTP file) to the frontend."""
 
     url = URL
-    name = "api:stellina_media"
+    name = "api:vaonis_media"
     requires_auth = True
 
     def __init__(self, hass: HomeAssistant) -> None:

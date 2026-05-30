@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Stellina",
-        "description": "Connect to your Stellina telescope. Your Home Assistant host must be able to reach the telescope (directly on its Wi-Fi, or via a bridge).",
+        "title": "Vaonis Smart Telescope",
+        "description": "Connect to your Vaonis telescope (Stellina, Vespera, …). Your Home Assistant host must be able to reach the telescope (directly on its Wi-Fi, or via a bridge).",
         "data": {
           "host": "Host"
         }

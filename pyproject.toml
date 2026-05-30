@@ -1,7 +1,7 @@
 [project]
-name = "pystellina"
+name = "pyvaonis"
 version = "0.1.0"
-description = "Async client + CLI for Vaonis Stellina smart telescopes (local Wi-Fi API)"
+description = "Async client + CLI for Vaonis smart telescopes (local Wi-Fi API)"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Douwe Maan", email = "hi@douwe.me" }]
@@ -22,23 +22,23 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DouweM/pystellina"
-Repository = "https://github.com/DouweM/pystellina"
-Issues = "https://github.com/DouweM/pystellina/issues"
+Homepage = "https://github.com/DouweM/pyvaonis"
+Repository = "https://github.com/DouweM/pyvaonis"
+Issues = "https://github.com/DouweM/pyvaonis/issues"
 
 [project.optional-dependencies]
 cli = ["typer>=0.15", "rich>=13.9"]
 astro = ["ephem>=4.1"]  # planet/Moon/Sun ephemerides (solar-system targets)
 
 [project.scripts]
-stellina = "pystellina.cli:app"
+vaonis = "pyvaonis.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pystellina"]
+packages = ["pyvaonis"]
 
 [dependency-groups]
 dev = [
@@ -60,7 +60,7 @@ ignore = ["E501", "B008"]  # B008: typer.Option(...) defaults are the Typer idio
 
 [tool.ruff.lint.isort]
 force-single-line = true
-known-first-party = ["pystellina"]
+known-first-party = ["pyvaonis"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -70,7 +70,7 @@ pythonVersion = "3.13"
 typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
-include = ["pystellina", "tests"]
+include = ["pyvaonis", "tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

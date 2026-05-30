@@ -10,8 +10,8 @@ from homeassistant.config_entries import ConfigFlow
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from pystellina import StellinaClient
-from pystellina import StellinaError
+from pyvaonis import VaonisClient
+from pyvaonis import VaonisError
 
 from .const import CONF_HOST
 from .const import DEFAULT_HOST
@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_HOST, default=DEFAULT_HOST): str})
 
 
-class StellinaConfigFlow(ConfigFlow, domain=DOMAIN):
+class VaonisConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Stellina."""
 
     VERSION = 1
@@ -34,10 +34,10 @@ class StellinaConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = user_input[CONF_HOST]
-            client = StellinaClient(ip=host, session=async_get_clientsession(self.hass))
+            client = VaonisClient(ip=host, session=async_get_clientsession(self.hass))
             try:
                 status = await client.connect()
-            except StellinaError:
+            except VaonisError:
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error connecting to Stellina")

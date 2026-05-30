@@ -16,11 +16,11 @@ from homeassistant.core import ServiceResponse
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
-from pystellina import StellinaError
+from pyvaonis import VaonisError
 
 from .const import DOMAIN
-from .coordinator import StellinaConfigEntry
-from .coordinator import StellinaCoordinator
+from .coordinator import VaonisConfigEntry
+from .coordinator import VaonisCoordinator
 from .http import register_view
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def _guard_service(handler):  # type: ignore[no-untyped-def]
     async def wrapper(call: ServiceCall):  # type: ignore[no-untyped-def]
         try:
             return await handler(call)
-        except StellinaError as err:
+        except VaonisError as err:
             raise HomeAssistantError(str(err)) from err
 
     return wrapper
@@ -99,9 +99,9 @@ RUN_PLAN_SCHEMA = vol.Schema(
 # standalone Open-Meteo check for off-grid use without Home Assistant.
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: StellinaConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: VaonisConfigEntry) -> bool:
     """Set up Stellina from a config entry."""
-    coordinator = StellinaCoordinator(hass, entry)
+    coordinator = VaonisCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
@@ -111,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: StellinaConfigEntry) -> 
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: StellinaConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: VaonisConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
@@ -149,7 +149,7 @@ def _register_services(hass: HomeAssistant) -> None:
             client.request_timeout = prev_timeout
 
         media_root = hass.config.media_dirs.get("local") or hass.config.path("media")
-        out_dir = Path(media_root) / "stellina"
+        out_dir = Path(media_root) / "vaonis"
         await hass.async_add_executor_job(functools.partial(os.makedirs, out_dir, exist_ok=True))
         out_path = out_dir / f"{capture_id}.{'tif' if fmt == 'tiff' else 'jxl'}"
         await hass.async_add_executor_job(out_path.write_bytes, data)
@@ -163,7 +163,7 @@ def _register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
-    def _first_coordinator() -> StellinaCoordinator:
+    def _first_coordinator() -> VaonisCoordinator:
         entries = [
             e
             for e in hass.config_entries.async_entries(DOMAIN)
@@ -178,8 +178,8 @@ def _register_services(hass: HomeAssistant) -> None:
         from datetime import UTC
         from datetime import datetime
 
-        from pystellina import PlanItem
-        from pystellina import observing_window
+        from pyvaonis import PlanItem
+        from pyvaonis import observing_window
 
         coordinator = _first_coordinator()
         lat, lon = hass.config.latitude, hass.config.longitude

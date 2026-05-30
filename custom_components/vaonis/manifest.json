@@ -1,0 +1,11 @@
+{
+  "domain": "vaonis",
+  "name": "Vaonis Smart Telescope",
+  "codeowners": ["@DouweM"],
+  "config_flow": true,
+  "documentation": "https://github.com/DouweM/pyvaonis",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/DouweM/pyvaonis/issues",
+  "requirements": ["pyvaonis[astro]==0.1.0"],
+  "version": "0.1.0"
+}

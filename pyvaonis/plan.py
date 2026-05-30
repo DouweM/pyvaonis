@@ -4,7 +4,7 @@ Unlike a client-driven loop, a plan is uploaded once (``planner/startPlan``) and
 runs the whole night by itself — auto-initialising, slewing target-to-target on a schedule, and
 advancing when each target's time window ends. It therefore keeps going even if the controlling
 client disconnects. This module turns a simple ``["M42:30", "M51:20"]`` target list into a valid
-:class:`~pystellina.models.PlanBody` (assigning each target a back-to-back time window) and parses
+:class:`~pyvaonis.models.PlanBody` (assigning each target a back-to-back time window) and parses
 the plan's live progress out of the status stream.
 """
 
@@ -50,7 +50,7 @@ def build_plan(
     longitude: float,
     device_id: str,
     start_time: datetime | None = None,
-    observatory_name: str = "pystellina",
+    observatory_name: str = "pyvaonis",
     app_version: str = const.APP_VERSION,
     allow_solar: bool = False,
 ) -> PlanBody:

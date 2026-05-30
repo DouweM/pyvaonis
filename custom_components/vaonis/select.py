@@ -15,13 +15,13 @@ from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from pystellina import StellinaError
-from pystellina import visibility_rating
-from pystellina import visible_now
+from pyvaonis import VaonisError
+from pyvaonis import visibility_rating
+from pyvaonis import visible_now
 
-from .coordinator import StellinaConfigEntry
-from .coordinator import StellinaCoordinator
-from .entity import StellinaEntity
+from .coordinator import VaonisConfigEntry
+from .coordinator import VaonisCoordinator
+from .entity import VaonisEntity
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
@@ -30,19 +30,19 @@ MAX_OPTIONS = 25
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: StellinaConfigEntry,
+    entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the target select."""
-    async_add_entities([StellinaTargetSelect(entry.runtime_data, hass)])
+    async_add_entities([VaonisTargetSelect(entry.runtime_data, hass)])
 
 
-class StellinaTargetSelect(StellinaEntity, SelectEntity):
+class VaonisTargetSelect(VaonisEntity, SelectEntity):
     """Choose tonight's observation target."""
 
     _attr_translation_key = "target"
 
-    def __init__(self, coordinator: StellinaCoordinator, hass: HomeAssistant) -> None:
+    def __init__(self, coordinator: VaonisCoordinator, hass: HomeAssistant) -> None:
         """Initialise the select and compute the first option set."""
         super().__init__(coordinator, "target")
         self._hass = hass
@@ -95,7 +95,7 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
         """Take control, start observing the chosen object, then release (one-shot)."""
         try:
             await self.coordinator.run_action(lambda c: c.observe_object(option, replace=True))
-        except StellinaError as err:
+        except VaonisError as err:
             raise HomeAssistantError(str(err)) from err
         self._attr_current_option = option
         self.async_write_ha_state()

@@ -1,13 +1,13 @@
-# pystellina
+# pyvaonis
 
-Async Python client, CLI, and Home Assistant integration for **Vaonis Stellina** smart
-telescopes, over the telescope's **local Wi-Fi API** — no Vaonis cloud, no account.
+Async Python client, CLI, and Home Assistant integration for **Vaonis** smart telescopes
+(Stellina, Vespera, …), over the telescope's **local Wi-Fi API** — no Vaonis cloud, no account.
 
 Reverse-engineered from *Singularity by Vaonis* v1.38.10 (`com.vaonis.barnard`), and confirmed
 against real hardware (firmware 2.35.7). Reference docs:
 - [`CLAUDE.md`](CLAUDE.md) — agent orientation / project handoff (read first for a fresh session)
 - [`PROTOCOL.md`](PROTOCOL.md) — the wire protocol (auth, socket, endpoints, catalog model)
-- [`docs/API.md`](docs/API.md) — every REST endpoint + body + pystellina coverage
+- [`docs/API.md`](docs/API.md) — every REST endpoint + body + pyvaonis coverage
 - [`docs/STATUS.md`](docs/STATUS.md) — the full status-object schema
 This README is the usage guide.
 
@@ -71,7 +71,7 @@ The Stellina is its own Wi-Fi access point at `10.0.0.1` with three services:
 
 Each REST call carries an `Authorization` header: an **Ed25519 (TweetNaCl) signature** over the
 rotating `challenge` from the status stream, using keys embedded in the app — computed locally in
-[`pystellina/auth.py`](pystellina/auth.py), so no server/account is needed. The `challenge`
+[`pyvaonis/auth.py`](pyvaonis/auth.py), so no server/account is needed. The `challenge`
 changes with every status push, so the client signs each request from the latest status (you must
 have a socket.io status before REST calls authenticate).
 
@@ -99,7 +99,7 @@ None of this is a substitute for care, but the dangerous surfaces are gated rath
 ## Install
 
 ```bash
-pip install "pystellina[cli,astro]"     # library + CLI + planet/Moon ephemerides
+pip install "pyvaonis[cli,astro]"     # library + CLI + planet/Moon ephemerides
 # development:
 uv sync --extra cli --extra astro
 ```
@@ -111,12 +111,12 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 
 ## CLI reference
 
-`stellina <command>` (all accept `--ip`, default `10.0.0.1`). Set once in your environment to avoid
+`vaonis <command>` (all accept `--ip`, default `10.0.0.1`). Set once in your environment to avoid
 retyping (and to dodge the negative-longitude arg-parsing footgun):
 
 ```bash
-export STELLINA_HOST=10.0.0.1     # or your bridge IP
-export STELLINA_LAT=19.43 STELLINA_LON=-99.13
+export VAONIS_HOST=10.0.0.1     # or your bridge IP
+export VAONIS_LAT=19.43 VAONIS_LON=-99.13
 ```
 
 Location for `tonight`/`forecast`/`plan` resolves **arg → env → the scope's own position** (it knows
@@ -146,28 +146,28 @@ control, busy, unreachable) print one clean line; add `--debug` for the full tra
 | `api ENDPOINT [-X METHOD] [-f k=v …] [-d JSON]` | `gh api`-style raw signed call; prints HTTP status + JSON |
 | `post ENDPOINT [--json-body '{}']` / `get ENDPOINT` | Lower-level raw signed REST calls |
 
-Global `--debug` logs wire traffic (socket.io / Engine.IO / aiohttp): `stellina --debug status`.
+Global `--debug` logs wire traffic (socket.io / Engine.IO / aiohttp): `vaonis --debug status`.
 
 > Negative coordinates: a leading-`-` value (e.g. a western longitude) is read as an option, so
-> end option parsing with `--` first: `stellina forecast -- 19.43 -99.13`.
+> end option parsing with `--` first: `vaonis forecast -- 19.43 -99.13`.
 
 **Debugging a new telescope** (do this in order):
 ```bash
-stellina doctor                  # is the bridge up? which ports/services respond?
-stellina --debug watch           # see raw socket.io events + the status payload shape
-stellina selftest 52.37 4.90     # functional pass/fail across every capability
-stellina api app/status          # poke any endpoint; e.g. -X POST general/park
+vaonis doctor                  # is the bridge up? which ports/services respond?
+vaonis --debug watch           # see raw socket.io events + the status payload shape
+vaonis selftest 52.37 4.90     # functional pass/fail across every capability
+vaonis api app/status          # poke any endpoint; e.g. -X POST general/park
 ```
 
 Example unattended night (native autonomous plan, starts at dusk):
 ```bash
-stellina plan M42:30 "Andromeda Galaxy:45" Jupiter:10 52.37 4.90 --wait-for-dark
+vaonis plan M42:30 "Andromeda Galaxy:45" Jupiter:10 52.37 4.90 --wait-for-dark
 ```
 
 ## Library reference
 
 ```python
-from pystellina import StellinaClient, ObservationBody, visible_now, get_object, PlanItem
+from pyvaonis import StellinaClient, ObservationBody, visible_now, get_object, PlanItem
 
 async with StellinaClient(ip="10.0.0.1") as scope:   # opens socket.io, waits for first status
     await scope.take_control()
@@ -189,15 +189,15 @@ Key surfaces:
   `current_observation/current_image/recent_images/fetch_current_image`,
   `export_url/export_capture`, `library/download_file`, `post/get/request`. Accepts an existing
   `aiohttp.ClientSession` (HA passes its own) and `on_status(callback)` for push updates.
-- `pystellina.catalog` — `load_catalog`, `get_object`, `visible_now`, `visible_tonight`, `CatalogObject`.
-- `pystellina.astro` — `is_dark`, `sun_altitude`, `observing_window`, `solar_system_radec`.
-- `pystellina.observation` — `ObservationProgress`, `LiveImage`, `recent_images`.
-- `pystellina.plan` — `build_plan`, `PlanItem`, `PlanProgress`.
-- `pystellina.ftp` — `list_dir`, `download`, `FtpEntry`.
+- `pyvaonis.catalog` — `load_catalog`, `get_object`, `visible_now`, `visible_tonight`, `CatalogObject`.
+- `pyvaonis.astro` — `is_dark`, `sun_altitude`, `observing_window`, `solar_system_radec`.
+- `pyvaonis.observation` — `ObservationProgress`, `LiveImage`, `recent_images`.
+- `pyvaonis.plan` — `build_plan`, `PlanItem`, `PlanProgress`.
+- `pyvaonis.ftp` — `list_dir`, `download`, `FtpEntry`.
 
 ## Targets & "tonight"
 
-The app's full catalog is bundled in `pystellina/data/catalog.json` — **421 objects** with name +
+The app's full catalog is bundled in `pyvaonis/data/catalog.json` — **421 objects** with name +
 description, RA/Dec, magnitude, constellation, a curated `grade` (0–10), and per-object
 recommended capture settings. Visibility is computed locally — no cloud:
 
@@ -211,7 +211,7 @@ is computed via `ephem` and fed into a normal go-to. Stellina is a wide-field de
 planets are small in it — that's optics, not software.
 
 **Darkness** matches the app exactly: night begins when the Sun drops below **−10°**
-(`pystellina.astro.is_dark`); `observing_window()` returns tonight's dusk→dawn.
+(`pyvaonis.astro.is_dark`); `observing_window()` returns tonight's dusk→dawn.
 
 Regenerate the catalog from an APK you own:
 ```bash
@@ -224,7 +224,7 @@ python tools/extract_catalog.py singularity.apk --strings out/res/values/strings
 During an observation the telescope **live-stacks**: one capture accumulates frames over time, so
 integration grows as `stacking_count × exposure` — the app's "layering over a longer exposure".
 
-The live frame is already written to the scope's disk, so `stellina image` downloads that file
+The live frame is already written to the scope's disk, so `vaonis image` downloads that file
 directly (instant). `--rendered` instead asks the firmware to re-encode the JPEG on demand (what
 the app does) — correct, but slow while it is also stacking.
 
@@ -235,7 +235,7 @@ controller disconnects. `build_plan()` assigns back-to-back windows from a simpl
 list:
 
 ```python
-from pystellina import PlanItem
+from pyvaonis import PlanItem
 # fire-and-forget: returns once the plan is uploaded; the scope runs it autonomously
 await scope.take_control()
 await scope.start_plan(
@@ -255,13 +255,13 @@ connected and watch `plan_progress().finished` if you want to `request_shutdown(
 
 **Is tonight worth imaging?** Two paths, depending on whether you're running under Home Assistant:
 
-- **Off-grid (laptop on the scope's Wi-Fi, no HA):** `stellina forecast` / `pystellina.weather.assess_night()`
+- **Off-grid (laptop on the scope's Wi-Fi, no HA):** `vaonis forecast` / `pyvaonis.weather.assess_night()`
   pulls a cloud-cover forecast from Open-Meteo (free, no key — its low/mid/high layers are what matter
   for astro), looks only at tonight's dark window, folds in the Moon (via `ephem`), and gives a
   `good`/`marginal`/`poor` verdict:
 
   ```bash
-  stellina forecast 52.37 4.90
+  vaonis forecast 52.37 4.90
   # dark window 00:57-01:57 UTC
   # verdict: GOOD — clear: ~0% mean cloud (max 0%); bright Moon up (98%) — hurts faint deep-sky
   ```
@@ -313,21 +313,21 @@ automation:
 
 `stellina.run_plan` uploads the native plan and returns immediately (`{started: true}`); the scope
 then runs autonomously. `stellina.stop_plan` cancels it. The same plan is available standalone from
-the CLI: `stellina plan M42:30 M51:20 … LAT LON --wait-for-dark`.
+the CLI: `vaonis plan M42:30 M51:20 … LAT LON --wait-for-dark`.
 
 ## Full-res export & saved library
 
 - **Export** a finished capture at full resolution: `capture/exportImageTiff` (TIFF) or
   `capture/exportImageJpegXl` (JPEG-XL). Both return a download URL on the telescope's HTTP server;
-  `export_capture()` renders and downloads in one call. CLI: `stellina export <captureId>`.
+  `export_capture()` renders and downloads in one call. CLI: `vaonis export <captureId>`.
 - **Saved library**: finished observations are stored on the telescope's anonymous FTP under
-  `/user/...`. `library()` / `download_file()` browse and fetch them. CLI: `stellina library`,
-  `stellina download`.
+  `/user/...`. `library()` / `download_file()` browse and fetch them. CLI: `vaonis library`,
+  `vaonis download`.
 
 ## Home Assistant integration
 
 This repo doubles as a HACS custom integration in
-[`custom_components/stellina`](custom_components/stellina). It wraps `pystellina` and a push-based
+[`custom_components/vaonis`](custom_components/vaonis). It wraps `pyvaonis` and a push-based
 `DataUpdateCoordinator` fed by the socket.io stream. **It connects read-only** — it monitors without
 taking control, so it coexists with the phone app. Actions are **one-shot**: each control button /
 target select / service takes control, acts, and releases it immediately, so the phone can resume
@@ -338,7 +338,7 @@ release it there first.)
 
 **Install (HACS):** add this repo as a custom repository (category *Integration*), install, restart,
 then add the *Stellina* integration and set the host (default `10.0.0.1`). The integration's
-`manifest.json` requires `pystellina[astro]` from PyPI — publish it (CI does this on a `v*` tag) or
+`manifest.json` requires `pyvaonis[astro]` from PyPI — publish it (CI does this on a `v*` tag) or
 `pip install` it into the HA venv for local dev.
 
 **Entities & services** (device shows model + firmware version):
@@ -387,7 +387,7 @@ defaults to 2.4 GHz. Dual-band alternatives: GL-SFT1200 "Opal" (~$40), GL-A1300 
 3. **Internet → Repeater →** scan, join the Stellina's SSID (enter its password if set). The
    router's WAN side gets a `10.0.0.x` lease; its LAN stays `192.168.8.x`.
 4. Put Home Assistant (or your laptop) on the GL.iNet LAN (Ethernet or its Wi-Fi). It can now reach
-   the telescope at `10.0.0.1`. Test with `stellina watch`.
+   the telescope at `10.0.0.1`. Test with `vaonis watch`.
 5. To reach it from your **existing** LAN, either (a) run HA on a box attached to the GL.iNet, or
    (b) uplink the GL.iNet to your home switch and add a static route to `10.0.0.0/24` via the
    router (or use OpenWrt `relayd` to bridge it onto your main subnet).
@@ -407,11 +407,11 @@ Stellina**, and its **WAN Ethernet** plugs into your target VLAN:
    (e.g. `10.3.142.50`). This IP is what clients talk to.
 3. GL **port forwards** (WAN → the repeater-side scope), 1:1 ports so image URLs keep working:
    `TCP 8082 → 10.0.0.1:8082`, `8083 → 10.0.0.1:8083`, `21 → 10.0.0.1:21`.
-4. Point pystellina / the HA integration at the GL's VLAN IP (`StellinaClient(ip="10.3.142.50")`).
+4. Point pyvaonis / the HA integration at the GL's VLAN IP (`StellinaClient(ip="10.3.142.50")`).
    REST, socket.io, live images and full-res export all ride HTTP on 8082/8083 — done.
 5. FTP (saved library) is passive-mode: install the router's FTP NAT helper
    (`opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`) so dynamic passive ports are forwarded.
-   pystellina already ignores the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`),
+   pyvaonis already ignores the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`),
    so with the helper the archive browse works through the bridge; without it, only FTP is affected
    (HTTP control/imaging/export are fine).
 
@@ -421,7 +421,7 @@ This mirrors the common "GL.iNet + Ethernet + port-forward" pattern, except the 
 ## Project layout
 
 ```
-pystellina/                 # the library (flat layout)
+pyvaonis/                 # the library (flat layout)
   const.py                  # IP, ports, endpoints, URL helpers
   auth.py                   # Ed25519 challenge → Authorization header (embedded keys)
   models.py                 # StellinaStatus, ObservationBody, AutoInitBody
@@ -435,7 +435,7 @@ pystellina/                 # the library (flat layout)
   _eio3.py                  # minimal Engine.IO v3 / Socket.IO v2 websocket client
   cli.py                    # Typer CLI (entry point `stellina`)
   data/catalog.json         # bundled object catalog (regenerate via tools/)
-custom_components/stellina/ # HACS integration wrapping pystellina
+custom_components/vaonis/ # HACS integration wrapping pyvaonis
   __init__.py coordinator.py entity.py config_flow.py
   sensor.py binary_sensor.py button.py select.py camera.py
   media_source.py http.py   # media browser + proxy view
@@ -477,14 +477,14 @@ validates the integration with hassfest + HACS. `publish.yml` builds and publish
 ## Hardware validation
 
 The socket protocol is now pinned from the decompiled app: **Engine.IO v3** over websocket, inbound
-event **`STATUS_UPDATED`** (a JSON object), client-initiated ping — implemented in `pystellina/_eio3.py`.
+event **`STATUS_UPDATED`** (a JSON object), client-initiated ping — implemented in `pyvaonis/_eio3.py`.
 The client still keeps a shape-based fallback (detect status by the `challenge` field) in case a
 firmware variant differs. What remains is a one-time confirmation that the live frames match.
 
-On the Stellina Wi-Fi, in order: `stellina doctor` (reachability), `stellina --debug watch` (confirm
-event names / payload shapes), then `stellina selftest 52.37 4.90` which runs the whole functional
+On the Stellina Wi-Fi, in order: `vaonis doctor` (reachability), `vaonis --debug watch` (confirm
+event names / payload shapes), then `vaonis selftest 52.37 4.90` which runs the whole functional
 checklist (connect → status → control → `app/status` → live image → FTP library → export) and prints
-PASS/FAIL/SKIP per step. Use `stellina api <endpoint>` to poke anything by hand. If the live shapes
+PASS/FAIL/SKIP per step. Use `vaonis api <endpoint>` to poke anything by hand. If the live shapes
 differ from what's parsed, adjust the JSON keys in `observation.py`.
 
 ## Legal / License

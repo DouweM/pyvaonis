@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC
 from datetime import datetime
 
-from pystellina import astro
+from pyvaonis import astro
 
 LAT, LON = 52.37, 4.90  # Amsterdam
 NIGHT = datetime(2026, 1, 15, 22, 0, tzinfo=UTC)  # ~23:00 local, deep winter night

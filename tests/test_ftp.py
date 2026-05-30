@@ -6,7 +6,7 @@ from typing import ClassVar
 
 import pytest
 
-import pystellina.ftp as ftp_mod
+import pyvaonis.ftp as ftp_mod
 
 
 class FakeFTP:

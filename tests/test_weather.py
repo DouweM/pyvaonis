@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC
 from datetime import datetime
 
-from pystellina.weather import HourCondition
-from pystellina.weather import _parse_forecast
-from pystellina.weather import summarize
+from pyvaonis.weather import HourCondition
+from pyvaonis.weather import _parse_forecast
+from pyvaonis.weather import summarize
 
 SAMPLE = {
     "hourly": {

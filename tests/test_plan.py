@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from pystellina.client import StellinaClient
-from pystellina.client import StellinaCommandError
-from pystellina.models import StellinaStatus
-from pystellina.plan import PlanItem
-from pystellina.plan import PlanProgress
-from pystellina.plan import build_plan
+from pyvaonis.client import VaonisClient
+from pyvaonis.client import VaonisCommandError
+from pyvaonis.models import VaonisStatus
+from pyvaonis.plan import PlanItem
+from pyvaonis.plan import PlanProgress
+from pyvaonis.plan import build_plan
 
 # A fixed night so solar-separation/ephemeris are deterministic.
 WHEN = datetime(2026, 1, 15, 22, 0, tzinfo=UTC)
@@ -74,8 +74,8 @@ def test_build_plan_blocks_near_sun_target() -> None:
         )
 
 
-def _client(**status_fields: Any) -> StellinaClient:
-    client = StellinaClient(ip="10.0.0.1", device_id="me")
+def _client(**status_fields: Any) -> VaonisClient:
+    client = VaonisClient(ip="10.0.0.1", device_id="me")
     raw: dict[str, Any] = {
         "challenge": "xQUJD",
         "telescopeId": "T1",
@@ -84,13 +84,13 @@ def _client(**status_fields: Any) -> StellinaClient:
         "initialized": True,
     }
     raw.update(status_fields)
-    client.status = StellinaStatus.model_validate(raw)
+    client.status = VaonisStatus.model_validate(raw)
     return client
 
 
 async def test_start_plan_requires_idle_and_posts_to_planner() -> None:
     busy = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
-    with pytest.raises(StellinaCommandError, match="already running"):
+    with pytest.raises(VaonisCommandError, match="already running"):
         await busy.start_plan([PlanItem("M42", 10.0)], latitude=LAT, longitude=LON)
 
     c = _client()

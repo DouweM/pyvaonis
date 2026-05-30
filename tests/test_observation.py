@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pystellina.observation import ObservationProgress
-from pystellina.observation import recent_images
+from pyvaonis.observation import ObservationProgress
+from pyvaonis.observation import recent_images
 
 RAW = {
     "currentOperation": {

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from pystellina.models import ObservationBody
-from pystellina.models import StellinaStatus
+from pyvaonis.models import ObservationBody
+from pyvaonis.models import VaonisStatus
 
 
 def test_status_parses_aliases_and_keeps_extra() -> None:
-    status = StellinaStatus.model_validate(
+    status = VaonisStatus.model_validate(
         {
             "challenge": "xABC",
             "telescopeId": "STELLINA-1",
@@ -26,7 +26,7 @@ def test_status_parses_aliases_and_keeps_extra() -> None:
 
 
 def test_status_without_challenge_cannot_authenticate() -> None:
-    status = StellinaStatus.model_validate({"telescopeId": "x", "bootCount": 1})
+    status = VaonisStatus.model_validate({"telescopeId": "x", "bootCount": 1})
     assert not status.can_authenticate
     with pytest.raises(ValueError):
         status.auth_args()

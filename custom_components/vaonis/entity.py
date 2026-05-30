@@ -10,15 +10,15 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .const import MANUFACTURER
 from .const import MODEL
-from .coordinator import StellinaCoordinator
+from .coordinator import VaonisCoordinator
 
 
-class StellinaEntity(CoordinatorEntity[StellinaCoordinator]):
+class VaonisEntity(CoordinatorEntity[VaonisCoordinator]):
     """Base entity tying everything to a single telescope device."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: StellinaCoordinator, key: str) -> None:
+    def __init__(self, coordinator: VaonisCoordinator, key: str) -> None:
         """Initialise common attributes."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{self._telescope_id}_{key}"
@@ -32,17 +32,20 @@ class StellinaEntity(CoordinatorEntity[StellinaCoordinator]):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Describe the telescope as a single HA device."""
+        """Describe the telescope as a single HA device (model resolved from status)."""
+        from pyvaonis import model_display_name
+
         status = self.coordinator.data
+        model = model_display_name(status.model if status else None)
         name = MODEL
         sw_version = None
         if status:
-            name = (status.raw.get("settings") or {}).get("telescopeName") or MODEL
+            name = (status.raw.get("settings") or {}).get("telescopeName") or model
             sw_version = status.raw.get("version")
         return DeviceInfo(
             identifiers={(DOMAIN, self._telescope_id)},
             manufacturer=MANUFACTURER,
-            model=(status.model if status and status.model else MODEL),
+            model=model,
             name=name,
             sw_version=sw_version,
         )

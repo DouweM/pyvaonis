@@ -8,15 +8,15 @@ from typing import Any
 
 import pytest
 
-from pystellina import ObservationBody
-from pystellina import StellinaClient
-from pystellina import astro
-from pystellina.client import StellinaCommandError
-from pystellina.models import StellinaStatus
+from pyvaonis import ObservationBody
+from pyvaonis import VaonisClient
+from pyvaonis import astro
+from pyvaonis.client import VaonisCommandError
+from pyvaonis.models import VaonisStatus
 
 
-def _client(**status_fields: Any) -> StellinaClient:
-    client = StellinaClient(ip="10.0.0.1", device_id="me")
+def _client(**status_fields: Any) -> VaonisClient:
+    client = VaonisClient(ip="10.0.0.1", device_id="me")
     raw: dict[str, Any] = {
         "challenge": "xQUJD",
         "telescopeId": "T1",
@@ -25,28 +25,28 @@ def _client(**status_fields: Any) -> StellinaClient:
         "initialized": True,
     }
     raw.update(status_fields)
-    client.status = StellinaStatus.model_validate(raw)
+    client.status = VaonisStatus.model_validate(raw)
     return client
 
 
 # -- endpoint guards (static) ----------------------------------------------------------
 def test_firmware_upload_always_blocked() -> None:
     c = _client()
-    with pytest.raises(StellinaCommandError, match="firmware"):
+    with pytest.raises(VaonisCommandError, match="firmware"):
         c._guard_endpoint("updates/uploadUpdateFile", allow_unsafe=True)
 
 
 def test_destructive_blocked_without_optin() -> None:
     c = _client()
     for ep in ("storage/deleteUserStorageFolders", "userManager/applyResetResponse"):
-        with pytest.raises(StellinaCommandError):
+        with pytest.raises(VaonisCommandError):
             c._guard_endpoint(ep, allow_unsafe=False)
         c._guard_endpoint(ep, allow_unsafe=True)  # explicit opt-in allowed
 
 
 def test_solar_blocked_without_optin() -> None:
     c = _client()
-    with pytest.raises(StellinaCommandError, match="solar"):
+    with pytest.raises(VaonisCommandError, match="solar"):
         c._guard_endpoint("sun/startSunMode", allow_unsafe=False)
 
 
@@ -59,7 +59,7 @@ def test_safe_endpoints_pass() -> None:
 # -- preconditions ---------------------------------------------------------------------
 def test_require_control_fails_when_not_master() -> None:
     c = _client(masterDeviceId="someone-else")
-    with pytest.raises(StellinaCommandError, match="control"):
+    with pytest.raises(VaonisCommandError, match="control"):
         c._require_control("x")
 
 
@@ -67,32 +67,32 @@ async def test_park_refused_when_busy() -> None:
     c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
     posted: list[Any] = []
     c.post = lambda *a, **k: posted.append(a)  # type: ignore[method-assign]
-    with pytest.raises(StellinaCommandError, match="operation is already running"):
+    with pytest.raises(VaonisCommandError, match="operation is already running"):
         await c.park()
     assert not posted  # guard fired before any POST
 
 
 async def test_shutdown_refused_when_busy_without_force() -> None:
     c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
-    with pytest.raises(StellinaCommandError):
+    with pytest.raises(VaonisCommandError):
         await c.request_shutdown()
 
 
 async def test_switch_frequency_validates_band() -> None:
     c = _client()
-    with pytest.raises(StellinaCommandError, match="band"):
+    with pytest.raises(VaonisCommandError, match="band"):
         await c.switch_frequency("BAND_60_GHZ")
 
 
 async def test_observe_refused_when_uninitialized() -> None:
     c = _client(initialized=False)
-    with pytest.raises(StellinaCommandError, match="initialised"):
+    with pytest.raises(VaonisCommandError, match="initialised"):
         await c.start_observation(ObservationBody(object_name="x", ra=10.0, de=20.0))
 
 
 async def test_observe_refused_when_busy_without_replace() -> None:
     c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
-    with pytest.raises(StellinaCommandError, match="already running"):
+    with pytest.raises(VaonisCommandError, match="already running"):
         await c.start_observation(ObservationBody(object_name="x", ra=10.0, de=20.0))
 
 
@@ -122,13 +122,13 @@ async def test_observe_replace_stops_running_observation_then_starts() -> None:
 async def test_observe_blocks_near_sun() -> None:
     c = _client()
     sun_ra, sun_dec = astro.sun_position(datetime.now(UTC))
-    with pytest.raises(StellinaCommandError, match="Sun"):
+    with pytest.raises(VaonisCommandError, match="Sun"):
         await c.start_observation(ObservationBody(object_name="too close", ra=sun_ra, de=sun_dec))
 
 
 async def test_in_observation_actions_require_control_and_build_bodies() -> None:
     blocked = _client(masterDeviceId="someone-else")
-    with pytest.raises(StellinaCommandError, match="control"):
+    with pytest.raises(VaonisCommandError, match="control"):
         await blocked.adjust_framing(1, 2)
 
     c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})  # master, observing

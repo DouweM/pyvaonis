@@ -2,7 +2,7 @@
 
 Uses Open-Meteo (free, no API key) for hourly cloud cover — its explicit low/mid/high cloud
 layers are what matter for astrophotography. Combines the forecast over tonight's dark window
-(Sun ≤ -10°, from :mod:`pystellina.astro`) with the Moon (if ``ephem`` is installed) into a
+(Sun ≤ -10°, from :mod:`pyvaonis.astro`) with the Moon (if ``ephem`` is installed) into a
 simple ``good`` / ``marginal`` / ``poor`` verdict. The app itself uses OpenWeatherMap.
 """
 

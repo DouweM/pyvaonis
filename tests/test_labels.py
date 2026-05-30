@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pystellina.labels import autoinit_step_label
-from pystellina.labels import summarize
+from pyvaonis.labels import autoinit_step_label
+from pyvaonis.labels import summarize
 
 
 def test_idle() -> None:

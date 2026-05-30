@@ -21,36 +21,36 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from pystellina import StellinaClient
-from pystellina import StellinaError
-from pystellina import StellinaStatus
+from pyvaonis import VaonisClient
+from pyvaonis import VaonisError
+from pyvaonis import VaonisStatus
 
 from .const import CONF_HOST
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-type StellinaConfigEntry = ConfigEntry[StellinaCoordinator]
+type VaonisConfigEntry = ConfigEntry[VaonisCoordinator]
 
 
-class StellinaCoordinator(DataUpdateCoordinator[StellinaStatus]):
+class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
     """Manage the socket.io connection and push status updates."""
 
-    def __init__(self, hass: HomeAssistant, entry: StellinaConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: VaonisConfigEntry) -> None:
         """Initialise the coordinator."""
         super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=None)
-        self.client = StellinaClient(
+        self.client = VaonisClient(
             ip=entry.data[CONF_HOST],
             session=async_get_clientsession(hass),
         )
         self.client.on_status(self._handle_status)
         self.plan_task: asyncio.Task[None] | None = None
 
-    def _handle_status(self, status: StellinaStatus) -> None:
+    def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""
         self.async_set_updated_data(status)
 
-    async def run_action(self, action: Callable[[StellinaClient], Awaitable[Any]]) -> Any:
+    async def run_action(self, action: Callable[[VaonisClient], Awaitable[Any]]) -> Any:
         """One-shot control: take control, run ``action``, then release it (HA never holds control).
 
         Releasing does not stop a started observation/plan — the scope runs on autonomously — so the
@@ -61,15 +61,15 @@ class StellinaCoordinator(DataUpdateCoordinator[StellinaStatus]):
         try:
             return await action(self.client)
         finally:
-            with contextlib.suppress(StellinaError):
+            with contextlib.suppress(VaonisError):
                 await self.client.release_control()
 
-    async def _async_update_data(self) -> StellinaStatus:
+    async def _async_update_data(self) -> VaonisStatus:
         """Connect (once), read-only; returns the current status. Control is taken on demand."""
         try:
             if not self.client.connected:
                 return await self.client.connect()
-        except StellinaError as err:
+        except VaonisError as err:
             raise UpdateFailed(str(err)) from err
         if self.data is None:  # pragma: no cover - defensive
             raise UpdateFailed("no status received yet")

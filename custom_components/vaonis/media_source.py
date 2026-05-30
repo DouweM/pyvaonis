@@ -18,22 +18,22 @@ from homeassistant.components.media_source import Unresolvable
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .coordinator import StellinaConfigEntry
+from .coordinator import VaonisConfigEntry
 from .http import _mime_for
 
 FTP_ROOT = "/user"
 
 
-async def async_get_media_source(hass: HomeAssistant) -> StellinaMediaSource:
+async def async_get_media_source(hass: HomeAssistant) -> VaonisMediaSource:
     """Set up the Stellina media source."""
-    return StellinaMediaSource(hass)
+    return VaonisMediaSource(hass)
 
 
 def _b64(text: str) -> str:
     return base64.urlsafe_b64encode(text.encode()).decode()
 
 
-def _entries(hass: HomeAssistant) -> list[StellinaConfigEntry]:
+def _entries(hass: HomeAssistant) -> list[VaonisConfigEntry]:
     return [
         e
         for e in hass.config_entries.async_entries(DOMAIN)
@@ -41,7 +41,7 @@ def _entries(hass: HomeAssistant) -> list[StellinaConfigEntry]:
     ]
 
 
-class StellinaMediaSource(MediaSource):
+class VaonisMediaSource(MediaSource):
     """Browse telescope captures: live/recent frames and the saved FTP archive."""
 
     name = "Stellina"

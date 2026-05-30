@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from pystellina import StellinaClient
-from pystellina.client import StellinaCommandError
+from pyvaonis import VaonisClient
+from pyvaonis.client import VaonisCommandError
 
 
-def _client() -> StellinaClient:
-    return StellinaClient(ip="10.0.0.1")
+def _client() -> VaonisClient:
+    return VaonisClient(ip="10.0.0.1")
 
 
 async def test_export_tiff_posts_and_builds_url() -> None:
@@ -65,5 +65,5 @@ async def test_export_capture_downloads_bytes() -> None:
 
 
 async def test_unknown_format_raises() -> None:
-    with pytest.raises(StellinaCommandError):
+    with pytest.raises(VaonisCommandError):
         await _client().export_url("abc", "png")
