@@ -29,10 +29,14 @@ fetch (real M104 JPEG), `observing`, FTP. Repo is **private**: `github.com/Douwe
 - The app's "Save" = save-to-phone (not a scope op). Telescope-side persist = `capture/setToBeResumable`.
 
 ## Bridge to the LAN (planned, not yet built)
-Scope is AP-only → needs a Wi-Fi bridge. Plan: GL.iNet **GL-MT300N-V2 "Mango"** in repeater mode joins
-the Stellina AP; its WAN Ethernet → oasys **IoT VLAN (10.3.142.0/24)**; **port-forward 8082/8083/21 →
-10.0.0.1**; point pyvaonis/HA at the GL's IoT IP. HA is on the services VLAN (10.3.127.x). FTP needs the
-router's conntrack FTP helper. Details in `README.md` → "Wi-Fi bridge". (User is buying the Mango.)
+Scope is AP-only → needs a Wi-Fi bridge. Plan: GL.iNet **GL-MT300N-V2 "Mango"** in **repeater mode**
+joins the Stellina AP (Stellina = Mango's WAN/`wwan`, 10.0.0.x). The Mango's **LAN (Ethernet)** gets a
+**static IP on the oasys IoT VLAN (10.3.142.50/24), DHCP off**, plugged into a UDM IoT port. **UDM
+static route 10.0.0.0/24 → 10.3.142.50**; the Mango NATs LAN→Stellina (default), so all ports route
+(no per-port forward). HA is on the services VLAN (10.3.127.x). FTP needs the Mango's conntrack FTP
+helper. Repeater **auto-reconnects** when the scope powers on (~1-2 min warm-up; no API trigger); the
+Mango stays up on Ethernet meanwhile. Full recipe in `README.md` → "Wi-Fi bridge". (User is buying the
+Mango.)
 
 ## Repo layout
 ```

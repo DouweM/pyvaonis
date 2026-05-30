@@ -381,42 +381,42 @@ router in **Repeater / WISP mode** that joins the telescope's Wi-Fi.
 **Cheapest hardware:** GL.iNet **GL-MT300N-V2 "Mango" (~$25, 2.4 GHz)** — fine since Stellina
 defaults to 2.4 GHz. Dual-band alternatives: GL-SFT1200 "Opal" (~$40), GL-A1300 "Slate Plus" (~$70).
 
-**Setup:**
-1. Power on the Stellina; it broadcasts `STELLINA-xxxx`. (Only one device controls it at a time.)
-2. Connect to the GL.iNet admin panel (`http://192.168.8.1`).
-3. **Internet → Repeater →** scan, join the Stellina's SSID (enter its password if set). The
-   router's WAN side gets a `10.0.0.x` lease; its LAN stays `192.168.8.x`.
-4. Put Home Assistant (or your laptop) on the GL.iNet LAN (Ethernet or its Wi-Fi). It can now reach
-   the telescope at `10.0.0.1`. Test with `vaonis watch`.
-5. To reach it from your **existing** LAN, either (a) run HA on a box attached to the GL.iNet, or
-   (b) uplink the GL.iNet to your home switch and add a static route to `10.0.0.0/24` via the
-   router (or use OpenWrt `relayd` to bridge it onto your main subnet).
+**Which side is WAN?** Because the scope is an AP, the Mango must *join* it as a Wi-Fi **client** —
+so the **Stellina sits on the Mango's WAN (Wi-Fi/`wwan`) side**, and your **UDM/LAN connects to the
+Mango's Ethernet (LAN) side**. You don't bridge at L2; you **route** to `10.0.0.1` through the Mango,
+which NATs LAN→Stellina (the default direction, so no custom firewall rules).
 
-**Caveats:** single-radio 2.4 GHz halves throughput (fine for control/status, slower for image/FTP
-pulls — choose dual-band to avoid); FTP uses passive mode (works through repeater NAT; enable the
-conntrack FTP helper if it stalls across a routed setup); the scope allows one controller at a time.
+**Recommended (fixed install on a UniFi UDM + IoT VLAN):**
+1. Power on the Stellina (`STELLINA-xxxx`). **Mango → Internet → Repeater →** join its SSID (enter a
+   password only if set). The Mango's `wwan` gets `10.0.0.x` with gateway `10.0.0.1`.
+2. **Mango LAN → IoT VLAN.** Give the Mango's **LAN** a **static IP on your IoT VLAN**
+   (e.g. `10.3.142.50/24`, gateway = the UDM IoT gateway) and **disable the Mango's DHCP server** (so
+   it doesn't fight UniFi). Plug the Mango's **LAN** (not WAN) port into a UDM access port on that VLAN.
+3. **UDM → static route:** `10.0.0.0/24` → next hop `10.3.142.50`. That's the whole bridge — your
+   network now reaches `10.0.0.1` via the Mango, which NATs to the Stellina. All three services work
+   over the route (no per-port forwarding).
+4. **FTP (saved library)** is passive-mode: enable the Mango's FTP conntrack helper
+   (`opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`). pyvaonis already ignores the scope's
+   advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`); REST (8082) / socket (8083) need nothing.
+5. Point HA / pyvaonis at **`10.0.0.1`** (`VAONIS_HOST=10.0.0.1`). Test with `vaonis doctor` then
+   `vaonis watch`.
 
-### Bridging onto a VLAN with 1:1 port-forwards (recommended for a fixed install)
+**Always-on Mango, scope only on when in use:** repeater mode **remembers the SSID and
+auto-reconnects** — configure it once (Stellina on), and the Mango rejoins `STELLINA-xxxx` by itself
+whenever the scope powers up. No API/manual trigger. Expect a **~1–2 min warm-up** (the scope takes
+~30 s to raise its AP, then the Mango needs a scan cycle). The Mango stays online/manageable on its
+Ethernet the whole time; while the scope is off, calls to `10.0.0.1` fail and pyvaonis reports a
+clean "unreachable" error (and HA's `connected` binary sensor reflects the real link, so you can gate
+automations on it).
 
-To reach the scope from a different subnet (e.g. Home Assistant on a services VLAN, scope exposed on
-an IoT VLAN) without merging subnets — the GL.iNet's single radio is the **repeater client of the
-Stellina**, and its **WAN Ethernet** plugs into your target VLAN:
+**Alternative (port-forward):** instead of the UDM static route, you can DNAT on the Mango —
+`TCP 8082/8083/21 → 10.0.0.1` — and point pyvaonis at the Mango's IP. Matches the classic "GL.iNet +
+Ethernet WAN + port-forward" pattern, but passive FTP across the forward is fiddly, so the route-based
+recipe above is cleaner here.
 
-1. GL **Repeater** → join `STELLINA-xxxx` (radio becomes the uplink to `10.0.0.1`).
-2. GL **WAN Ethernet** → a switch port on the target VLAN; give the GL a reserved IP there
-   (e.g. `10.3.142.50`). This IP is what clients talk to.
-3. GL **port forwards** (WAN → the repeater-side scope), 1:1 ports so image URLs keep working:
-   `TCP 8082 → 10.0.0.1:8082`, `8083 → 10.0.0.1:8083`, `21 → 10.0.0.1:21`.
-4. Point pyvaonis / the HA integration at the GL's VLAN IP (`VaonisClient(ip="10.3.142.50")`).
-   REST, socket.io, live images and full-res export all ride HTTP on 8082/8083 — done.
-5. FTP (saved library) is passive-mode: install the router's FTP NAT helper
-   (`opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`) so dynamic passive ports are forwarded.
-   pyvaonis already ignores the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`),
-   so with the helper the archive browse works through the bridge; without it, only FTP is affected
-   (HTTP control/imaging/export are fine).
-
-This mirrors the common "GL.iNet + Ethernet + port-forward" pattern, except the forward target is the
-**repeater-side** `10.0.0.1` (the Stellina is an AP, so the router is its *client*, not its host).
+**Caveats:** single-radio 2.4 GHz halves throughput (fine for control/status, slower for image/FTP —
+a dual-band GL-SFT1200 "Opal" ~$40 / GL-A1300 "Slate Plus" ~$70 avoids it); keep the scope on 2.4 GHz
+(don't `switch_frequency` to 5 GHz or the Mango can't follow); one controller at a time.
 
 ## Project layout
 
