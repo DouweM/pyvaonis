@@ -86,6 +86,44 @@ def _storage_free_mb(coordinator: StellinaCoordinator) -> Any:
     return round(avail / 1000) if isinstance(avail, int | float) else None
 
 
+def _capture(coordinator: StellinaCoordinator) -> dict[str, Any] | None:
+    op = coordinator.data.raw.get("currentOperation") if coordinator.data else None
+    if isinstance(op, dict) and op.get("type") == "OBSERVATION" and not op.get("stopped"):
+        cap = op.get("capture")
+        return cap if isinstance(cap, dict) else None
+    return None
+
+
+def _gain(coordinator: StellinaCoordinator) -> Any:
+    cap = _capture(coordinator)
+    return ((cap or {}).get("cameraParams") or {}).get("gain") if cap else None
+
+
+def _exposure_seconds(coordinator: StellinaCoordinator) -> Any:
+    cap = _capture(coordinator)
+    us = ((cap or {}).get("cameraParams") or {}).get("exposureMicroSec") if cap else None
+    return round(us / 1_000_000, 1) if isinstance(us, int | float) else None
+
+
+def _frames_acquired(coordinator: StellinaCoordinator) -> Any:
+    cap = _capture(coordinator)
+    return cap.get("acquisitionCount") if cap else None
+
+
+def _plan_state(coordinator: StellinaCoordinator) -> Any:
+    plan = coordinator.client.plan_progress()
+    return plan.state if plan else None
+
+
+def _plan_target(coordinator: StellinaCoordinator) -> Any:
+    plan = coordinator.client.plan_progress()
+    if not plan:
+        return None
+    if plan.current_target and plan.current_index is not None:
+        return f"{plan.current_target} ({plan.current_index + 1}/{plan.target_count})"
+    return plan.current_target
+
+
 def _controlling_device(coordinator: StellinaCoordinator) -> Any:
     raw = coordinator.data.raw if coordinator.data else {}
     master = raw.get("masterDeviceId")
@@ -191,6 +229,37 @@ SENSORS: tuple[StellinaSensorDescription, ...] = (
         translation_key="controlling_device",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_controlling_device,
+    ),
+    StellinaSensorDescription(
+        key="frames_acquired",
+        translation_key="frames_acquired",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_frames_acquired,
+    ),
+    StellinaSensorDescription(
+        key="gain",
+        translation_key="gain",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_gain,
+    ),
+    StellinaSensorDescription(
+        key="exposure",
+        translation_key="exposure",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_exposure_seconds,
+    ),
+    StellinaSensorDescription(
+        key="plan_state",
+        translation_key="plan_state",
+        value_fn=_plan_state,
+    ),
+    StellinaSensorDescription(
+        key="plan_target",
+        translation_key="plan_target",
+        value_fn=_plan_target,
     ),
 )
 

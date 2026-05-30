@@ -60,7 +60,23 @@ BINARY_SENSORS: tuple[StellinaBinaryDescription, ...] = (
             (c.data.raw.get("sensors") or {}).get("defogStatus", "OFF") != "OFF" if c.data else None
         ),
     ),
+    StellinaBinaryDescription(
+        key="update_available",
+        translation_key="update_available",
+        device_class=BinarySensorDeviceClass.UPDATE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: _update_available(c.data.raw.get("update") or {}) if c.data else None,
+    ),
 )
+
+
+def _update_available(update: dict[str, object]) -> bool | None:
+    """True when the installed firmware differs from an available one (status.update)."""
+    installed = update.get("installedVersion")
+    available = update.get("availableVersion") or update.get("latestVersion")
+    if not installed or not available:
+        return False
+    return installed != available
 
 
 async def async_setup_entry(

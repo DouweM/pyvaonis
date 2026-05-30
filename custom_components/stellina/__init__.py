@@ -36,8 +36,32 @@ SERVICE_EXPORT_CAPTURE = "export_capture"
 SERVICE_RUN_PLAN = "run_plan"
 SERVICE_STOP_PLAN = "stop_plan"
 SERVICE_OBSERVE = "observe"
+SERVICE_AUTOINIT = "autoinit"
+SERVICE_ADJUST_FRAMING = "adjust_framing"
+SERVICE_SET_CAMERA_PARAMS = "set_camera_params"
 OBSERVE_SCHEMA = vol.Schema(
     {vol.Required("target"): str, vol.Optional("allow_solar", default=False): bool}
+)
+AUTOINIT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("latitude"): vol.Coerce(float),
+        vol.Optional("longitude"): vol.Coerce(float),
+        vol.Optional("skip_autofocus", default=False): bool,
+    }
+)
+ADJUST_FRAMING_SCHEMA = vol.Schema(
+    {
+        vol.Optional("x", default=0): vol.Coerce(int),
+        vol.Optional("y", default=0): vol.Coerce(int),
+        vol.Optional("rot", default=0.0): vol.Coerce(float),
+    }
+)
+SET_CAMERA_PARAMS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("gain"): vol.Coerce(int),
+        vol.Optional("exposure_seconds"): vol.Coerce(float),
+        vol.Optional("saturation"): vol.Coerce(float),
+    }
 )
 EXPORT_SCHEMA = vol.Schema(
     {
@@ -179,3 +203,36 @@ def _register_services(hass: HomeAssistant) -> None:
         )
 
     hass.services.async_register(DOMAIN, SERVICE_OBSERVE, observe, schema=OBSERVE_SCHEMA)
+
+    async def autoinit(call: ServiceCall) -> None:
+        """Initialise/align the telescope (defaults to Home Assistant's configured location)."""
+        client = _first_coordinator().client
+        lat = call.data.get("latitude", hass.config.latitude)
+        lon = call.data.get("longitude", hass.config.longitude)
+        await client.take_control()
+        await client.start_autoinit(lat, lon, skip_auto_focus=call.data["skip_autofocus"])
+
+    async def adjust_framing(call: ServiceCall) -> None:
+        """Nudge the live framing (the app's 'Change Framing'); safe during an observation."""
+        client = _first_coordinator().client
+        await client.take_control()
+        await client.adjust_framing(call.data["x"], call.data["y"], call.data["rot"])
+
+    async def set_camera_params(call: ServiceCall) -> None:
+        """Live-tune gain/exposure/saturation during an observation."""
+        client = _first_coordinator().client
+        exposure_us = call.data.get("exposure_seconds")
+        await client.take_control()
+        await client.set_camera_params(
+            gain=call.data.get("gain"),
+            exposure_micro_sec=int(exposure_us * 1_000_000) if exposure_us is not None else None,
+            saturation=call.data.get("saturation"),
+        )
+
+    hass.services.async_register(DOMAIN, SERVICE_AUTOINIT, autoinit, schema=AUTOINIT_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_ADJUST_FRAMING, adjust_framing, schema=ADJUST_FRAMING_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_CAMERA_PARAMS, set_camera_params, schema=SET_CAMERA_PARAMS_SCHEMA
+    )

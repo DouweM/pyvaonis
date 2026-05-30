@@ -326,11 +326,13 @@ then add the *Stellina* integration and set the host (default `10.0.0.1`). The i
 `pip install` it into the HA venv for local dev.
 
 **Entities & services** (device shows model + firmware version):
-- Sensors: current operation / **target** / **step**, **stacked frames** + **total**, **integration
-  time**, **temperature**, **humidity**, **dew-point depression**, **storage free**, **Wi-Fi band**,
-  **filter**, **autofocus temperature**, **controlling device**.
+- Sensors: current operation / **target** / **step**, **stacked frames** + **total** + **frames
+  acquired** (so you can see the accept/reject ratio), **integration time**, **gain**, **exposure**,
+  **plan state** + **plan target** (during a native plan), **temperature**, **humidity**, **dew-point
+  depression**, **storage free**, **Wi-Fi band**, **filter**, **autofocus temperature**,
+  **controlling device**.
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
-  `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**.
+  `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**.
 - Buttons: take control, **release control**, park, stop, **restart autofocus**, **enable
   multi-night**, shut down.
 - Switch: **Multi-Light (HDR)** (CovalENS).
@@ -339,9 +341,15 @@ then add the *Stellina* integration and set the host (default `10.0.0.1`). The i
 - Camera: **Live view** of the current stacked frame.
 - Media source: **Stellina** in the HA media browser — *Recent captures* (live) and *Saved library*
   (FTP `/system/captures`), streamed through HA via a proxy view.
-- Services: **`stellina.observe`** (slew to any catalog object), **`stellina.run_plan`** /
-  **`stellina.stop_plan`** (run/cancel an unattended night), **`stellina.export_capture`** (save a
-  full-res image to the HA media dir).
+- Services: **`stellina.observe`** (slew to any catalog object), **`stellina.autoinit`** (initialise/
+  align), **`stellina.adjust_framing`** (Change Framing) and **`stellina.set_camera_params`**
+  (live gain/exposure/saturation, both safe mid-observation), **`stellina.run_plan`** /
+  **`stellina.stop_plan`** (start/cancel the native autonomous plan), **`stellina.export_capture`**
+  (save a full-res image to the HA media dir).
+
+Still **not** surfaced (and why): Wi-Fi-band switch, firmware upload, factory reset/delete (all
+deliberately omitted — link-drop / brick / data-loss); and sun-eclipse, expert raw capture, playlist,
+mosaic, and multi-night *resume* (not yet implemented in the client either).
 
 HA (or whatever runs it) must be able to reach `10.0.0.1` — see the bridge below.
 

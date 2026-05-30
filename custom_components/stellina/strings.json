@@ -30,7 +30,12 @@
       "band": { "name": "Wi-Fi band" },
       "filter": { "name": "Filter" },
       "autofocus_temperature": { "name": "Autofocus temperature" },
-      "controlling_device": { "name": "Controlling device" }
+      "controlling_device": { "name": "Controlling device" },
+      "frames_acquired": { "name": "Frames acquired" },
+      "gain": { "name": "Gain" },
+      "exposure": { "name": "Exposure" },
+      "plan_state": { "name": "Plan state" },
+      "plan_target": { "name": "Plan target" }
     },
     "camera": {
       "live": { "name": "Live view" }
@@ -40,7 +45,8 @@
       "has_control": { "name": "Has control" },
       "dark": { "name": "Dark enough to observe" },
       "tracking": { "name": "Tracking" },
-      "defog": { "name": "Defog active" }
+      "defog": { "name": "Defog active" },
+      "update_available": { "name": "Firmware update available" }
     },
     "button": {
       "take_control": { "name": "Take control" },

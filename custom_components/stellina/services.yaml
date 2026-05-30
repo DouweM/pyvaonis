@@ -65,3 +65,64 @@ observe:
       default: false
       selector:
         boolean:
+
+autoinit:
+  name: Initialise / align
+  description: >-
+    Take control and run auto-init (plate-solve + autofocus) at a location. Defaults to Home
+    Assistant's configured latitude/longitude. Telescope must be idle.
+  fields:
+    latitude:
+      name: Latitude
+      description: Defaults to Home Assistant's location.
+      selector:
+        number: { min: -90, max: 90, step: 0.0001, mode: box }
+    longitude:
+      name: Longitude
+      description: Defaults to Home Assistant's location.
+      selector:
+        number: { min: -180, max: 180, step: 0.0001, mode: box }
+    skip_autofocus:
+      name: Skip autofocus
+      default: false
+      selector:
+        boolean:
+
+adjust_framing:
+  name: Change framing
+  description: >-
+    Nudge the live framing while observing (the app's "Change Framing"). Safe during an
+    observation.
+  fields:
+    x:
+      name: X offset
+      default: 0
+      selector:
+        number: { min: -1000, max: 1000, mode: box }
+    y:
+      name: Y offset
+      default: 0
+      selector:
+        number: { min: -1000, max: 1000, mode: box }
+    rot:
+      name: Rotation (degrees)
+      default: 0
+      selector:
+        number: { min: -180, max: 180, step: 0.1, mode: box }
+
+set_camera_params:
+  name: Set camera parameters
+  description: Live-tune gain / exposure / saturation during an observation (only set fields change).
+  fields:
+    gain:
+      name: Gain
+      selector:
+        number: { min: 0, max: 1000, mode: box }
+    exposure_seconds:
+      name: Exposure (seconds)
+      selector:
+        number: { min: 0.1, max: 60, step: 0.1, mode: box }
+    saturation:
+      name: Saturation
+      selector:
+        number: { min: 0, max: 5, step: 0.1, mode: box }
