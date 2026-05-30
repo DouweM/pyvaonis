@@ -100,3 +100,39 @@ attempts:[ { observationId, lastImage:{ index, url:"/files/plans/.../IMG_NNNN.jp
 ## Auth fields
 `getAuthHeader()` uses `challenge`, `telescopeId`, `bootCount` from this object (PROTOCOL.md §3).
 A fresh header is computed per REST call from the latest status (the challenge rotates).
+
+## On-device files (anonymous FTP, `:21`) — mapped live
+The internal storage tree (the HTTP image server serves the same files under `/files/...`):
+```
+/system/
+  captures/<storeId>/            # finished + in-progress observations  (storeId = "<date>_observation_<id>", older ones just "<date>")
+    images/IMG_NNNN.jpg          # the stacked preview frames
+    store.json | capture.json    # per-session metadata (older sessions use capture.json)
+  plan/target-N-observation-0/   # Plan-My-Night per-target results
+    images/...  capture.json
+    ../plan.json                 # the plan definition
+  bias/IMG/                      # bias frames
+  dark/                          # master darks
+  history/focus-history.json     # autofocus history
+  logs/{winston,sync}/ ...       # firmware logs
+  reports/<observationId>.json   # per-observation reports
+  temp/{acquisition,export,hdr,stacking}/   # scratch
+/user/                           # empty unless a USB drive / user storage is mounted
+```
+So **all past sessions' frames are retrievable over FTP** under `/system/captures/*` and
+`/system/plan/*` — this is the gallery source (each dir has `store.json`/`capture.json` with the
+target + settings; `storeId` encodes date + object). Note `captureStore.storedCaptures` (the
+"multi-night resumable" set) is *separate* and can be empty even when many capture dirs exist.
+
+## Quirks observed live (firmware 2.35.7)
+- **`masterDeviceId` can be `null` while an observation is still running** — the scope keeps
+  imaging autonomously after the controlling app releases/backgrounds. So "observing" ≠ "someone
+  holds control"; to send commands you still must `take_control`.
+- **`GET storage/userStorageFolderContent` → HTTP 500 `STORAGE.NO_USER_STORAGE`** when no USB drive
+  is attached (it queries *user* storage, not `/system`). Use FTP for the internal library.
+- **`GET reporter/getAvailableReports` → `{result: []}`** when there are no pending reports.
+- `connectedDevices` accumulates stale entries (every distinct `deviceId` lingers); use a stable
+  `device_id` (pystellina derives one from the host MAC) to avoid piling up.
+- Stacking acceptance is partial: e.g. M104 showed `stackingCount 180 / acquisitionCount 379`
+  (≈half rejected, `StackingRoundnessError`) — normal in poor seeing/wind. `images[]` is sparse
+  (not every index), so the latest frame is `images[-1]`, not `images[stackingCount-1]`.

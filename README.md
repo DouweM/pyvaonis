@@ -135,6 +135,9 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 
 Global `--debug` logs wire traffic (socket.io / Engine.IO / aiohttp): `stellina --debug status`.
 
+> Negative coordinates: a leading-`-` value (e.g. a western longitude) is read as an option, so
+> end option parsing with `--` first: `stellina forecast -- 19.43 -99.13`.
+
 **Debugging a new telescope** (do this in order):
 ```bash
 stellina doctor                  # is the bridge up? which ports/services respond?
