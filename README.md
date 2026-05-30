@@ -119,7 +119,7 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 | `watch [--seconds N]` | Stream raw socket.io events (discovery/debug) |
 | `observing` | Current observation: target, step, stacking count, integration |
 | `image [--out f.jpg] [--timeout S]` | Download the current live-stacked frame (auto-names `<object>_<frame>.jpg`) |
-| `tonight LAT LON [--window] [--require-dark] [--min-grade G] [--limit N]` | Visible now, or `--window` for peak altitudes across tonight's dark window |
+| `tonight [LAT LON] [--now] [--min-grade G] [--limit N]` | Peak altitudes across tonight's dark window (`--now` for a right-now snapshot) |
 | `forecast LAT LON` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
 | `info OBJECT` | Full catalog detail (name, description, magnitude, …) for an object |
 | `observe-object OBJECT` | Slew to a catalog object (e.g. `M42`, `"Orion Nebula"`, `Jupiter`) |

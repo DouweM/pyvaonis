@@ -9,22 +9,43 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 import typer
 
 from . import const
 from .client import StellinaClient
+from .client import StellinaError
 from .models import ObservationBody
 
-app = typer.Typer(help="Control a Vaonis Stellina over its local Wi-Fi.", no_args_is_help=True)
+app = typer.Typer(
+    help="Control a Vaonis Stellina over its local Wi-Fi.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
+
+# --help groups (typer renders one panel per distinct rich_help_panel).
+PANEL_CONTROL = "Telescope control"
+PANEL_LIVE = "Live view & library"
+PANEL_PLAN = "Planning (offline, no telescope)"
+PANEL_DEBUG = "Status & debug"
+
+# Defaults from the environment so you don't retype them (and to dodge the negative-longitude
+# argument-parsing footgun): set STELLINA_HOST / STELLINA_LAT / STELLINA_LON once.
+DEFAULT_IP = os.environ.get("STELLINA_HOST", const.DEFAULT_IP)
+_DEBUG = False
 
 
 @app.callback()
 def _main(
-    debug: bool = typer.Option(False, "--debug", help="Log wire traffic (socket.io/HTTP)."),
+    debug: bool = typer.Option(
+        False, "--debug", help="Log wire traffic and show full tracebacks on error."
+    ),
 ) -> None:
     """Stellina CLI."""
+    global _DEBUG
+    _DEBUG = debug
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
         for name in ("pystellina", "aiohttp", "asyncio"):
@@ -32,7 +53,18 @@ def _main(
 
 
 def _run(coro: Any) -> Any:
-    return asyncio.run(coro)
+    """Run a coroutine, turning expected telescope errors into a clean one-line message.
+
+    Without this, ordinary conditions (no control, an operation already running, scope not
+    reachable) dump a full Python traceback. ``--debug`` re-raises so you still get one.
+    """
+    try:
+        return asyncio.run(coro)
+    except StellinaError as err:
+        if _DEBUG:
+            raise
+        typer.secho(f"error: {err}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from None
 
 
 async def _with_client(ip: str, control: bool, fn: Any) -> Any:
@@ -42,19 +74,64 @@ async def _with_client(ip: str, control: bool, fn: Any) -> Any:
         return await fn(scope)
 
 
+def _location(
+    lat: float | None,
+    lon: float | None,
+    *,
+    ip: str | None = None,
+    use_scope: bool = False,
+    fallback: tuple[float, float] | None = None,
+) -> tuple[float, float]:
+    """Resolve a location: CLI args → STELLINA_LAT/LON env → ``fallback`` → (if ``use_scope``) the scope.
+
+    The scope reports its own GPS/observatory position in ``status.position``, so for commands that
+    can reach it you don't need to supply a location at all. ``fallback`` lets an already-connected
+    command pass that position without opening a second connection.
+    """
+    if lat is None and (env := os.environ.get("STELLINA_LAT")):
+        lat = float(env)
+    if lon is None and (env := os.environ.get("STELLINA_LON")):
+        lon = float(env)
+    if lat is not None and lon is not None:
+        return lat, lon
+    if fallback is not None:
+        return fallback
+    if use_scope and ip:
+        try:
+
+            async def _fetch() -> tuple[float, float] | None:
+                async with StellinaClient(ip=ip) as scope:
+                    return scope.location()
+
+            pos = asyncio.run(_fetch())
+        except StellinaError:
+            pos = None
+        if pos is not None:
+            typer.secho(
+                f"(using telescope location {pos[0]:.3f}, {pos[1]:.3f})",
+                fg=typer.colors.BRIGHT_BLACK,
+                err=True,
+            )
+            return pos
+    raise typer.BadParameter(
+        "no location: pass LAT LON, set STELLINA_LAT / STELLINA_LON, "
+        "or connect to the telescope (it knows its own position)"
+    )
+
+
 def _print(data: Any) -> None:
     typer.echo(json.dumps(data, indent=2, default=str))
 
 
 @app.command()
-def status(ip: str = const.DEFAULT_IP) -> None:
+def status(ip: str = DEFAULT_IP) -> None:
     """Connect and print one status snapshot (read-only)."""
     result = _run(_with_client(ip, False, lambda s: _ret(s.status.raw if s.status else {})))
     _print(result)
 
 
 @app.command()
-def watch(ip: str = const.DEFAULT_IP, seconds: int = 60) -> None:
+def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
     """Stream raw socket events (use to confirm event names / payloads)."""
 
     async def _watch() -> None:
@@ -72,19 +149,19 @@ def watch(ip: str = const.DEFAULT_IP, seconds: int = 60) -> None:
 
 
 @app.command()
-def park(ip: str = const.DEFAULT_IP) -> None:
+def park(ip: str = DEFAULT_IP) -> None:
     """Park the telescope. [IDLE ONLY — stop any observation first.]"""
     _print(_run(_with_client(ip, True, lambda s: s.park())))
 
 
 @app.command()
-def stop(ip: str = const.DEFAULT_IP) -> None:
+def stop(ip: str = DEFAULT_IP) -> None:
     """Stop the current observation. [Requires an observation to be running.]"""
     _print(_run(_with_client(ip, True, lambda s: s.stop_observation())))
 
 
 @app.command()
-def reframe(x: int, y: int, rot: float = 0.0, ip: str = const.DEFAULT_IP) -> None:
+def reframe(x: int, y: int, rot: float = 0.0, ip: str = DEFAULT_IP) -> None:
     """Change framing: nudge by x/y integer offsets, --rot degrees (takes control).
 
     [SAFE DURING OBSERVATION] — this is the app's "Change Framing".
@@ -93,7 +170,7 @@ def reframe(x: int, y: int, rot: float = 0.0, ip: str = const.DEFAULT_IP) -> Non
 
 
 @app.command()
-def restart_autofocus(no_restart_capture: bool = False, ip: str = const.DEFAULT_IP) -> None:
+def restart_autofocus(no_restart_capture: bool = False, ip: str = DEFAULT_IP) -> None:
     """Re-run deep-sky autofocus (also restarts the stack unless --no-restart-capture).
 
     [SAFE DURING OBSERVATION] — the app's "Restart autofocus".
@@ -110,7 +187,7 @@ def restart_autofocus(no_restart_capture: bool = False, ip: str = const.DEFAULT_
 @app.command()
 def multi_light(
     on: bool = typer.Option(..., "--on/--off", help="enable/disable Multi-Light (HDR)"),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Multi-Light: toggle the CovalENS HDR-background image mode (a setting; firmware >= 2.28).
 
@@ -121,7 +198,7 @@ def multi_light(
 
 
 @app.command()
-def multi_night(ip: str = const.DEFAULT_IP) -> None:
+def multi_night(ip: str = DEFAULT_IP) -> None:
     """Multi-night: mark the current stack resumable so it can keep integrating on a later night.
 
     [SAFE DURING OBSERVATION] (capture/setToBeResumable.) Distinct from `multi-light` (HDR mode).
@@ -132,7 +209,7 @@ def multi_night(ip: str = const.DEFAULT_IP) -> None:
 
 @app.command()
 def shutdown(
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
     yes: bool = typer.Option(False, "--yes", help="confirm: powers off the scope; drops the link"),
 ) -> None:
     """Power off the telescope board (requires --yes; you must press the button to restart)."""
@@ -146,13 +223,17 @@ def shutdown(
 
 @app.command()
 def autoinit(
-    lat: float, lon: float, ip: str = const.DEFAULT_IP, skip_autofocus: bool = False
+    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT)"),
+    lon: float | None = typer.Argument(None, help="longitude (default: $STELLINA_LON)"),
+    ip: str = DEFAULT_IP,
+    skip_autofocus: bool = False,
 ) -> None:
     """Initialise/align at a location. [IDLE ONLY.]"""
+    la, lo = _location(lat, lon)  # CLI > env (autoinit sets position, so don't read it back)
     _print(
         _run(
             _with_client(
-                ip, True, lambda s: s.start_autoinit(lat, lon, skip_auto_focus=skip_autofocus)
+                ip, True, lambda s: s.start_autoinit(la, lo, skip_auto_focus=skip_autofocus)
             )
         )
     )
@@ -170,7 +251,7 @@ def observe(
     replace: bool = typer.Option(
         True, "--replace/--no-replace", help="stop a running observation first (take over)"
     ),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Slew to a target and start imaging. [IDLE ONLY unless --replace, which takes over.]"""
     body = ObservationBody(
@@ -187,27 +268,35 @@ def observe(
 
 @app.command()
 def tonight(
-    lat: float,
-    lon: float,
+    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
+    lon: float | None = typer.Argument(
+        None, help="longitude (default: $STELLINA_LON or the scope)"
+    ),
     min_altitude: float = 15.0,
     min_grade: float = 0.0,
     limit: int = 20,
-    require_dark: bool = False,
-    window: bool = typer.Option(
-        False, "--window/--now", help="best targets across tonight's whole dark window vs right now"
+    now: bool = typer.Option(
+        False, "--now/--window", help="what's up at this instant, instead of across tonight"
     ),
+    require_dark: bool = typer.Option(
+        False, "--require-dark", help="(--now only) gate on the Sun being below -10deg right now"
+    ),
+    ip: str = DEFAULT_IP,
 ) -> None:
-    """List catalog objects visible at a location (offline, no telescope).
+    """What's worth imaging *tonight* at a location.
 
-    Default lists what's up *right now* (add --require-dark to gate on the Sun being below -10deg).
-    Pass --window for "what's worth imaging *tonight*": the peak altitude each object reaches over
-    tonight's dark window and when it peaks (UTC), including targets that haven't risen yet.
+    By default reports each object's peak altitude over tonight's dark window and when it peaks
+    (UTC), including targets that haven't risen yet — because "tonight" means the whole night, not
+    this instant. Pass --now for a snapshot of what's above the horizon right now (with optional
+    --require-dark to gate on darkness). Location comes from LAT/LON, else $STELLINA_LAT/LON, else
+    the connected telescope's own position.
     """
     from .astro import is_dark
     from .astro import observing_window
     from .catalog import visible_now
     from .catalog import visible_tonight
 
+    lat, lon = _location(lat, lon, ip=ip, use_scope=True)
     dark = is_dark(lat, lon)
     win = observing_window(lat, lon)
     typer.echo(
@@ -215,7 +304,7 @@ def tonight(
         + (f"  (dark window {win[0]:%H:%M}-{win[1]:%H:%M} UTC)" if win else "  (no dark window)")
     )
 
-    if window:
+    if not now:
         rows = visible_tonight(
             lat, lon, min_altitude=min_altitude, min_grade=min_grade, limit=limit
         )
@@ -246,16 +335,26 @@ def tonight(
         )
     if not rows:
         typer.echo(
-            "nothing to observe with those filters"
-            + (" (not dark yet — try --window to plan ahead)" if require_dark and not dark else "")
+            "nothing up right now with those filters"
+            + (" (not dark yet — drop --now to plan tonight)" if require_dark and not dark else "")
         )
 
 
 @app.command()
-def forecast(lat: float, lon: float) -> None:
-    """Is tonight worth imaging? Cloud forecast over the dark window + Moon (no telescope)."""
+def forecast(
+    lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
+    lon: float | None = typer.Argument(
+        None, help="longitude (default: $STELLINA_LON or the scope)"
+    ),
+    ip: str = DEFAULT_IP,
+) -> None:
+    """Is tonight worth imaging? Cloud forecast over the dark window + Moon (needs internet).
+
+    Location comes from LAT/LON, else $STELLINA_LAT/LON, else the connected telescope's position.
+    """
     from .weather import assess_night
 
+    lat, lon = _location(lat, lon, ip=ip, use_scope=True)
     night = _run(assess_night(lat, lon))
     if night.dark_start and night.dark_end:
         typer.echo(f"dark window {night.dark_start:%H:%M}-{night.dark_end:%H:%M} UTC")
@@ -287,7 +386,7 @@ def observe_object(
     replace: bool = typer.Option(
         True, "--replace/--no-replace", help="stop a running observation first (take over)"
     ),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Slew to a catalog object by id/name using its recommended settings.
 
@@ -297,7 +396,7 @@ def observe_object(
 
 
 @app.command()
-def observing(ip: str = const.DEFAULT_IP) -> None:
+def observing(ip: str = DEFAULT_IP) -> None:
     """Show the current observation (target, step, stacking), read-only."""
 
     async def _go(scope: StellinaClient) -> Any:
@@ -334,7 +433,7 @@ def image(
     timeout: float = typer.Option(
         120.0, "--timeout", help="seconds (only the slow --rendered path)"
     ),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Download the current live-stacked frame (read-only; SAFE during an observation).
 
@@ -372,16 +471,26 @@ def export(
     capture_id: str,
     out: str = "",
     format: str = "tiff",
-    ip: str = const.DEFAULT_IP,
+    timeout: float = typer.Option(
+        300.0, "--timeout", help="seconds; the full-res render blocks server-side and is slow"
+    ),
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Render and download a full-res capture (tiff|jxl) by captureId.
 
-    [SAFE DURING OBSERVATION — but the on-demand render competes with stacking; can be slow.]
+    [SAFE DURING OBSERVATION — but the on-demand render competes with stacking.] The telescope
+    renders the full-resolution image fresh (there is no pre-written full-res file to grab, unlike
+    the live preview), and the request blocks until it finishes — minutes, sometimes — so the
+    default --timeout is generous. The default 20s client timeout is why a plain export "hangs".
     """
 
     async def _go(scope: StellinaClient) -> Any:
+        scope.request_timeout = timeout  # the render (POST) + download both use this
         return await scope.export_capture(capture_id, format)
 
+    typer.echo(
+        f"rendering {format} of {capture_id} (full-res render is slow; waiting up to {timeout:.0f}s)…"
+    )
     data = _run(_with_client(ip, False, _go))
     path = out or f"{capture_id}.{'tif' if format == 'tiff' else 'jxl'}"
     with open(path, "wb") as fh:
@@ -392,7 +501,7 @@ def export(
 @app.command()
 def library(
     path: str = typer.Argument("/", help="FTP directory to list"),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """List the saved-image library over FTP (no control needed)."""
 
@@ -409,7 +518,7 @@ def library(
 
 
 @app.command()
-def download(path: str, out: str = "", ip: str = const.DEFAULT_IP) -> None:
+def download(path: str, out: str = "", ip: str = DEFAULT_IP) -> None:
     """Download a saved file from the library by its FTP path."""
     import os
 
@@ -426,23 +535,22 @@ def download(path: str, out: str = "", ip: str = const.DEFAULT_IP) -> None:
 @app.command()
 def plan(
     targets: list[str],
-    lat: float,
-    lon: float,
+    lat: float | None = typer.Option(None, "--lat", help="latitude (default: env or the scope)"),
+    lon: float | None = typer.Option(None, "--lon", help="longitude (default: env or the scope)"),
     name: str = "pystellina plan",
     wait_for_dark: bool = typer.Option(
         False, "--wait-for-dark", help="schedule the plan to start at the next dusk (Sun < -10°)"
     ),
     start_in: float = typer.Option(0.0, "--start-in", help="minutes from now to start (overrides)"),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
-    """Start the telescope's NATIVE autonomous plan, e.g.
-    `plan M42:30 M51:20 Jupiter:10 19.4 -99.2`.
+    """Start the telescope's NATIVE autonomous plan, e.g. `plan M42:30 M51:20 Jupiter:10`.
 
     [IDLE ONLY.] Uploads one Plan-My-Night (`planner/startPlan`) and returns: the firmware then
     auto-initialises and runs every target on schedule by itself, so you can disconnect. Watch it
-    with `stellina observing` / `stellina status`; cancel with `stellina stop-plan`. NB: the native
-    plan parks at the end on its own but has no power-off step — leave a session connected if you
-    want `shutdown`.
+    with `stellina observing`; cancel with `stellina stop-plan`. Location comes from --lat/--lon,
+    else $STELLINA_LAT/LON, else the scope's own position. NB: the native plan parks at the end on
+    its own but has no power-off step — leave a session connected if you want `shutdown`.
     """
     from datetime import UTC
     from datetime import datetime
@@ -453,28 +561,27 @@ def plan(
 
     items = [PlanItem.parse(t) for t in targets]
 
-    start_time: datetime | None = None
-    if start_in:
-        start_time = datetime.now(UTC) + timedelta(minutes=start_in)
-    elif wait_for_dark:
-        window = observing_window(lat, lon)
-        if window is None:
-            typer.echo("no dark window in the next 24h; refusing to schedule")
-            raise typer.Exit(1)
-        start_time = max(window[0], datetime.now(UTC))
-
     async def _go(scope: StellinaClient) -> Any:
+        la, lo = _location(lat, lon, fallback=scope.location())  # CLI > env > scope's own position
+        start_time: datetime | None = None
+        if start_in:
+            start_time = datetime.now(UTC) + timedelta(minutes=start_in)
+        elif wait_for_dark:
+            window = observing_window(la, lo)
+            if window is None:
+                raise StellinaError("no dark window in the next 24h; refusing to schedule")
+            start_time = max(window[0], datetime.now(UTC))
+        when = f" starting {start_time:%H:%M}Z" if start_time else " now"
+        typer.echo(f"uploading plan {name!r} ({len(items)} targets){when}…")
         return await scope.start_plan(
-            items, name=name, latitude=lat, longitude=lon, start_time=start_time
+            items, name=name, latitude=la, longitude=lo, start_time=start_time
         )
 
-    when = f" starting {start_time:%H:%M}Z" if start_time else " now"
-    typer.echo(f"uploading plan {name!r} ({len(items)} targets){when}…")
     _print(_run(_with_client(ip, True, _go)))
 
 
 @app.command()
-def stop_plan(ip: str = const.DEFAULT_IP) -> None:
+def stop_plan(ip: str = DEFAULT_IP) -> None:
     """Cancel the running native plan (planner/stopPlan)."""
     _print(_run(_with_client(ip, True, lambda s: s.stop_plan())))
 
@@ -498,7 +605,7 @@ def api(
     unsafe: bool = typer.Option(
         False, "--unsafe", help="Allow destructive (delete/reset) or solar (sun/*) endpoints."
     ),
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
 ) -> None:
     """Make a signed REST call, gh-style. Prints HTTP status + JSON body.
 
@@ -534,7 +641,7 @@ def api(
 
 
 @app.command()
-def doctor(ip: str = const.DEFAULT_IP) -> None:
+def doctor(ip: str = DEFAULT_IP) -> None:
     """Probe connectivity to the telescope (reachability only — run this first)."""
 
     def _err(err: Exception) -> str:
@@ -588,7 +695,7 @@ def doctor(ip: str = const.DEFAULT_IP) -> None:
 
 
 @app.command()
-def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = const.DEFAULT_IP) -> None:
+def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = DEFAULT_IP) -> None:
     """End-to-end checklist: connect, status, control, image, library, export.
 
     Optional steps (live image / export) are skipped cleanly when the scope is idle.
@@ -691,7 +798,7 @@ def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = const.DEFAULT_IP) -> 
 def post(
     endpoint: str,
     json_body: str = "{}",
-    ip: str = const.DEFAULT_IP,
+    ip: str = DEFAULT_IP,
     unsafe: bool = typer.Option(False, "--unsafe", help="Allow destructive/solar endpoints."),
 ) -> None:
     """Raw signed POST to a ``/v1`` endpoint (see also: `api`)."""
@@ -700,7 +807,7 @@ def post(
 
 
 @app.command()
-def get(endpoint: str, ip: str = const.DEFAULT_IP) -> None:
+def get(endpoint: str, ip: str = DEFAULT_IP) -> None:
     """Raw signed GET of a ``/v1`` endpoint."""
     _print(_run(_with_client(ip, False, lambda s: s.get(endpoint))))
 

@@ -53,6 +53,16 @@ class StellinaStatus(BaseModel):
         return self.active_operation is not None
 
     @property
+    def position(self) -> tuple[float, float] | None:
+        """The scope's own (latitude, longitude) from ``position``/observatory, or None."""
+        pos = self.raw.get("position")
+        if isinstance(pos, dict):
+            lat, lon = pos.get("latitude"), pos.get("longitude")
+            if isinstance(lat, int | float) and isinstance(lon, int | float):
+                return float(lat), float(lon)
+        return None
+
+    @property
     def can_authenticate(self) -> bool:
         """Whether enough fields are present to build an auth header."""
         return (

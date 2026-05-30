@@ -99,7 +99,14 @@ def _register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError("No capture_id given and nothing is being observed")
 
         fmt: str = call.data["format"]
-        data = await client.export_capture(capture_id, fmt)
+        # The full-res render blocks server-side for minutes; raise the (shared client) timeout
+        # for the duration so it doesn't trip the 20s default, then restore it.
+        prev_timeout = client.request_timeout
+        client.request_timeout = 300.0
+        try:
+            data = await client.export_capture(capture_id, fmt)
+        finally:
+            client.request_timeout = prev_timeout
 
         media_root = hass.config.media_dirs.get("local") or hass.config.path("media")
         out_dir = Path(media_root) / "stellina"

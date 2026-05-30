@@ -531,6 +531,10 @@ class StellinaClient:
         self._require_control("stop_plan")
         return await self.post(const.Endpoint.STOP_PLAN)
 
+    def location(self) -> tuple[float, float] | None:
+        """The telescope's own (latitude, longitude) from its status, or None if unknown."""
+        return self.status.position if self.status else None
+
     def plan_progress(self) -> Any:
         """Parsed progress of the running native plan, or None when no plan is active."""
         from .plan import PlanProgress
