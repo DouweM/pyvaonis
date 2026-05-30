@@ -197,20 +197,33 @@ an *optical* limitation, not a software one.
 (`GetSunDetailLifetime.getSunset/getSunrise` walk minute-by-minute until `rint(sunAlt) == -10`).
 `pystellina.astro.is_dark` / `observing_window` reproduce this.
 
-### Live images & stacking
+### Live images & stacking (verified on firmware 2.35.7)
 
-An observation **live-stacks**: `status.currentObservationOperation` holds a `capture`
-(`StellinaCapture`) that accumulates frames — `stackingCount` / `totalStackingCount`, a
-`StackingDuration`, and an `images[]` list of `StellinaCaptureImage { index, url, stackingCount }`.
-Integration time ≈ `stackingCount × userExposureMicroSec`. `previousCaptures[]` holds finished
-captures; `steps[] { name, progress }` is the live phase ("pointing", "capture", …).
+The active operation is top-level **`currentOperation`** (a single polymorphic object with a
+`type` discriminator — `OBSERVATION`, `AUTO_INIT`, `PARK`, …), **not** a per-type field. When
+`type == "OBSERVATION"` and `!stopped`, it carries:
+- `target { objectId, objectName, ra, de, rot }`, `framing`, `observationType`
+- `steps[]` — phases like `{type: "POINT_DEEP_SKY", name, steps:[…]}`, `{type: "CAPTURE"}`
+  (no numeric `progress` at this level)
+- `capture` — `{ id, cameraParams { exposureMicroSec, gain, width, height }, stackingCount,
+  stackingErrorCount, acquisitionCount, hasStacking, debayerInterpolation,
+  images:[ { index, url, cropX/Y/W/H, stackingCount, time } ] }`. The latest stacked frame is
+  `capture.images[-1]`; **integration ≈ `stackingCount × cameraParams.exposureMicroSec`**.
+- `store { state, storeId, totalStackingCount, exportImages[] }`
 
-The image URL is built by `Instrument.getImageUrl`:
-`http://<ip>:8082<httpRoot><image.url>?androidImageIndex=<index>&androidCaptureId=<capture.id>`
-(plain streaming GET, **no auth**; the query is cache-busting per stacked frame). `StellinaAPI`
-also exposes `capture/exportImageTiff` and `capture/exportImageJpegXl` for full-res exports, and
-finished files are on the anonymous FTP under `/user/...`. `pystellina/observation.py` parses
-this slice of status; `StellinaClient.fetch_current_image()` downloads the current frame.
+Image URL (built by `Instrument.getImageUrl`, confirmed live):
+`http://<ip>:8082<image.url>?androidImageIndex=<index>&androidCaptureId=<capture.id>` —
+e.g. `…/files/captures/2026-05-30_02-09-15_observation_M104/images/IMG_0042.jpg?…`. Plain GET,
+**no auth**; the query is cache-busting per frame. Finished operations are under
+`previousOperations` (keyed by type) with `…attempts[].lastImage` / per-target images at
+`/files/plans/…`. `capture/exportImageTiff` + `capture/exportImageJpegXl` give full-res exports.
+
+Other confirmed top-level status fields: `sensors { temperature, humidity, dewpointDepression,
+defogStatus }` (**no battery** — Stellina is mains/USB powered), `motors { AZ, ALT, DER, MAP →
+{position,state,calibrated} }`, `network { band, channel }`, `settings`, `storage`, `filter`,
+`masterDeviceId`, `connectedDevices[]`. `GET app/status` returns the same object wrapped as
+`{ success, result: {…} }`. `pystellina/observation.py` parses this; FTP `/user` was empty on the
+test unit (captures are served over HTTP `/files/...`).
 
 ## 6. Getting it onto your LAN (bridge options)
 

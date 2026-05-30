@@ -262,16 +262,22 @@ def export(
 
 
 @app.command()
-def library(path: str = "/user", ip: str = const.DEFAULT_IP) -> None:
+def library(
+    path: str = typer.Argument("/", help="FTP directory to list"),
+    ip: str = const.DEFAULT_IP,
+) -> None:
     """List the saved-image library over FTP (no control needed)."""
 
     async def _go(scope: StellinaClient) -> Any:
         return await scope.library(path)
 
-    for entry in _run(_with_client(ip, False, _go)):
+    entries = _run(_with_client(ip, False, _go))
+    for entry in entries:
         kind = "dir " if entry.is_dir else "file"
         size = f"{entry.size:>10}" if entry.size else " " * 10
         typer.echo(f"{kind} {size}  {entry.path}")
+    if not entries:
+        typer.echo(f"(empty: {path})")
 
 
 @app.command()

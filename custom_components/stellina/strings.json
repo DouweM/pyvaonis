@@ -23,7 +23,8 @@
       "target": { "name": "Current target" },
       "step": { "name": "Current step" },
       "stacking_count": { "name": "Stacked frames" },
-      "integration": { "name": "Integration time" }
+      "integration": { "name": "Integration time" },
+      "dewpoint_depression": { "name": "Dew point depression" }
     },
     "camera": {
       "live": { "name": "Live view" }

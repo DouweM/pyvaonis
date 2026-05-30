@@ -64,7 +64,7 @@ def test_require_control_fails_when_not_master() -> None:
 
 
 async def test_park_refused_when_busy() -> None:
-    c = _client(currentObservationOperation={"stopped": False})
+    c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
     posted: list[Any] = []
     c.post = lambda *a, **k: posted.append(a)  # type: ignore[method-assign]
     with pytest.raises(StellinaCommandError, match="operation is already running"):
@@ -73,7 +73,7 @@ async def test_park_refused_when_busy() -> None:
 
 
 async def test_shutdown_refused_when_busy_without_force() -> None:
-    c = _client(currentObservationOperation={"stopped": False})
+    c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
     with pytest.raises(StellinaCommandError):
         await c.request_shutdown()
 

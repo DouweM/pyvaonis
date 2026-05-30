@@ -96,7 +96,9 @@ class StellinaClient:
         request_timeout: float = 20.0,
     ) -> None:
         self.ip = ip
-        self.device_id = device_id or f"pystellina-{uuid.uuid4()}"
+        # Stable per-machine id so reconnects reuse one entry instead of piling up in
+        # connectedDevices (uuid.getnode() is the host's MAC-derived node id).
+        self.device_id = device_id or f"pystellina-{uuid.getnode():x}"
         self.name = name
         self.country_code = country_code
         self.request_timeout = request_timeout

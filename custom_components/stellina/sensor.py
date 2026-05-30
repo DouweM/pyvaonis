@@ -12,6 +12,7 @@ from homeassistant.components.sensor import SensorEntityDescription
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import PERCENTAGE
 from homeassistant.const import EntityCategory
+from homeassistant.const import UnitOfTemperature
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -28,21 +29,19 @@ class StellinaSensorDescription(SensorEntityDescription):
     value_fn: Callable[[StellinaCoordinator], Any]
 
 
-def _battery(coordinator: StellinaCoordinator) -> Any:
-    status = coordinator.data
-    battery = status.raw.get("internalBattery") if status else None
-    if isinstance(battery, dict):
-        for key in ("percent", "percentage", "level", "charge"):
-            if key in battery:
-                return battery[key]
-    return None
+def _sensors_field(key: str) -> Any:
+    def getter(coordinator: StellinaCoordinator) -> Any:
+        sensors = coordinator.data.raw.get("sensors") if coordinator.data else None
+        return sensors.get(key) if isinstance(sensors, dict) else None
+
+    return getter
 
 
 def _operation(coordinator: StellinaCoordinator) -> Any:
     op = coordinator.data.raw.get("currentOperation") if coordinator.data else None
-    if isinstance(op, dict):
-        return op.get("type") or op.get("name")
-    return op
+    if isinstance(op, dict) and not op.get("stopped"):
+        return op.get("type")
+    return None
 
 
 def _target(coordinator: StellinaCoordinator) -> Any:
@@ -67,12 +66,29 @@ def _integration(coordinator: StellinaCoordinator) -> Any:
 
 SENSORS: tuple[StellinaSensorDescription, ...] = (
     StellinaSensorDescription(
-        key="battery",
-        device_class=SensorDeviceClass.BATTERY,
+        key="temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_sensors_field("temperature"),
+    ),
+    StellinaSensorDescription(
+        key="humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_battery,
+        value_fn=_sensors_field("humidity"),
+    ),
+    StellinaSensorDescription(
+        key="dewpoint_depression",
+        translation_key="dewpoint_depression",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_sensors_field("dewpointDepression"),
     ),
     StellinaSensorDescription(
         key="operation",
