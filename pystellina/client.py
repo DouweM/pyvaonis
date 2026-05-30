@@ -560,6 +560,18 @@ class StellinaClient:
             return None
         return PlanProgress.from_status(self.status.raw)
 
+    def status_summary(self) -> str:
+        """One-line human status in the app's wording (e.g. 'M104: 180 stacked (30m)')."""
+        from . import labels
+
+        return labels.summarize(self.status.raw if self.status else None)
+
+    def autoinit_step(self) -> str | None:
+        """Label for the current auto-init step, or None when not initialising."""
+        from . import labels
+
+        return labels.autoinit_step_label(self.status.raw) if self.status else None
+
     # -- in-observation controls (the app's Change Framing / Restart autofocus / etc.) ---
     async def adjust_framing(self, x: int, y: int, rot: float = 0.0) -> dict[str, Any]:
         """Nudge the live framing — ``x``/``y`` integer offsets, ``rot`` in degrees."""

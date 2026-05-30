@@ -335,8 +335,11 @@ then add the *Stellina* integration and set the host (default `10.0.0.1`). The i
 `pip install` it into the HA venv for local dev.
 
 **Entities & services** (device shows model + firmware version):
-- Sensors: current operation / **target** / **step**, **stacked frames** + **total** + **frames
-  acquired** (so you can see the accept/reject ratio), **integration time**, **gain**, **exposure**,
+- Sensors: **Status** — a one-line human summary in the app's own wording ("M104: 180 stacked
+  (30m)", "Initialization: Star pattern analysis (50%)", "tonight — Observation in progress (M51,
+  2/5)"), plus **initialization step**, current operation / **target** / **step**, **stacked
+  frames** + **total** + **frames acquired** (so you can see the accept/reject ratio),
+  **integration time**, **gain**, **exposure**,
   **plan state** + **plan target** (during a native plan), **temperature**, **humidity**, **dew-point
   depression**, **storage free**, **Wi-Fi band**, **filter**, **autofocus temperature**,
   **controlling device**.

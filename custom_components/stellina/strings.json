@@ -19,6 +19,8 @@
   },
   "entity": {
     "sensor": {
+      "status": { "name": "Status" },
+      "init_step": { "name": "Initialization step" },
       "operation": { "name": "Current operation" },
       "target": { "name": "Current target" },
       "step": { "name": "Current step" },

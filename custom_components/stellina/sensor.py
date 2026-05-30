@@ -124,6 +124,14 @@ def _plan_target(coordinator: StellinaCoordinator) -> Any:
     return plan.current_target
 
 
+def _status_summary(coordinator: StellinaCoordinator) -> Any:
+    return coordinator.client.status_summary()
+
+
+def _init_step(coordinator: StellinaCoordinator) -> Any:
+    return coordinator.client.autoinit_step()
+
+
 def _controlling_device(coordinator: StellinaCoordinator) -> Any:
     raw = coordinator.data.raw if coordinator.data else {}
     master = raw.get("masterDeviceId")
@@ -134,6 +142,17 @@ def _controlling_device(coordinator: StellinaCoordinator) -> Any:
 
 
 SENSORS: tuple[StellinaSensorDescription, ...] = (
+    StellinaSensorDescription(
+        key="status",
+        translation_key="status",
+        value_fn=_status_summary,
+    ),
+    StellinaSensorDescription(
+        key="init_step",
+        translation_key="init_step",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_init_step,
+    ),
     StellinaSensorDescription(
         key="temperature",
         device_class=SensorDeviceClass.TEMPERATURE,

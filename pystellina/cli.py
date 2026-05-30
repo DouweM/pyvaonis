@@ -417,21 +417,22 @@ def info(object_id: str) -> None:
 
 @app.command(rich_help_panel=PANEL_LIVE)
 def observing(ip: str = DEFAULT_IP) -> None:
-    """Show the current observation (target, step, stacking), read-only."""
+    """Show what the scope is doing now (human status + observation/plan detail), read-only."""
 
     async def _go(scope: StellinaClient) -> Any:
-        return await _ret((scope.current_observation(), scope.plan_progress()))
+        return await _ret(
+            (scope.status_summary(), scope.current_observation(), scope.plan_progress())
+        )
 
-    obs, plan = _run(_with_client(ip, False, _go))
+    summary, obs, plan = _run(_with_client(ip, False, _go))
+    typer.secho(summary, fg=typer.colors.CYAN)
+    out: dict[str, Any] = {}
     if obs is not None:
         out = obs.model_dump()
-        if plan is not None:
-            out["plan"] = plan.model_dump()
+    if plan is not None:
+        out["plan"] = plan.model_dump()
+    if out:
         _print(out)
-    elif plan is not None:
-        _print({"plan": plan.model_dump()})
-    else:
-        _print({"observing": False})
 
 
 def _slugify(name: str) -> str:
