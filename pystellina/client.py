@@ -239,29 +239,51 @@ class StellinaClient:
         finally:
             self._status_callbacks.remove(_check)
 
+    def _device_name(self, device_id: str | None) -> str:
+        """Friendly name for a connected device id (from connectedDevices), else the id itself."""
+        if not device_id:
+            return "another device"
+        for dev in (self.status.raw.get("connectedDevices") if self.status else None) or []:
+            if isinstance(dev, dict) and dev.get("id") == device_id:
+                return dev.get("name") or device_id
+        return device_id
+
     async def take_control(self, *, wait: bool = True, timeout: float = 10.0) -> None:
         """Become the controlling ("master") device.
 
-        Note: this forcibly takes control — if the owner's phone app currently holds it, it will
-        be demoted. (The phone can take it back, after which our commands will start failing.)
+        The firmware will **not** hand control over while another device is master and connected
+        (``takeControl`` is silently rejected with ``CONTROL_ERROR`` — the app even disables its
+        "take control" button in that case). It only transfers once the current master releases
+        control or disconnects. So this succeeds when no one holds control (or we already do);
+        otherwise it raises a clear error telling you to release control on the other device.
 
         With ``wait`` (default), block until the status stream confirms ``masterDeviceId`` is us —
-        otherwise the immediately-following command races the confirmation and fails its
-        ``_require_control`` guard. This mirrors the app, which only enables commands once it sees
-        ``connectedAsMaster``.
+        otherwise the immediately-following command races the confirmation and fails its guard.
         """
         if self.has_control:
             return
-        if self.status and self.status.master_device_id:
-            _LOGGER.warning("taking control from current master %s", self.status.master_device_id)
+        held_by = self.status.master_device_id if self.status else None
+        if held_by:
+            _LOGGER.warning("control is held by %s; requesting takeover", held_by)
         await self._emit(const.MSG_TAKE_CONTROL)
         await self._emit(const.MSG_SET_USER_NAME, {"device": self.device_id, "user": self.name})
-        if wait:
+        if not wait:
+            return
+        try:
             await self._wait_for_status(
                 lambda s: s.master_device_id == self.device_id,
                 timeout=timeout,
                 desc="control confirmation (masterDeviceId)",
             )
+        except StellinaCommandError:
+            if held_by and held_by != self.device_id:
+                raise StellinaCommandError(
+                    f"can't take control: {self._device_name(held_by)} currently controls the "
+                    "telescope. The firmware won't transfer control while that device is connected "
+                    "and observing — in the Singularity app, stop/abort the observation or release "
+                    "control (or close/disconnect that device), then retry."
+                ) from None
+            raise
 
     async def release_control(self) -> None:
         """Give up control."""
