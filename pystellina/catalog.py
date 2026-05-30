@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from functools import cache
 from importlib import resources
 from typing import Any
@@ -155,6 +156,15 @@ class VisibleObject(BaseModel):
     altitude: float
 
 
+class TonightObject(BaseModel):
+    """A catalog object with its best (peak) altitude over tonight's dark window."""
+
+    obj: CatalogObject
+    peak_altitude: float
+    peak_time: datetime  # UTC, when it peaks within the window
+    up_now: bool  # already above min_altitude at the window start / now
+
+
 @cache
 def load_catalog() -> tuple[CatalogObject, ...]:
     """Load and cache the bundled catalog."""
@@ -213,4 +223,56 @@ def visible_now(
             results.append(VisibleObject(obj=obj, altitude=alt))
 
     results.sort(key=lambda v: (v.obj.grade or 0, v.altitude), reverse=True)
+    return results[:limit] if limit is not None else results
+
+
+def visible_tonight(
+    latitude: float,
+    longitude: float,
+    when: datetime | None = None,
+    *,
+    min_altitude: float = 15.0,
+    min_grade: float = 0.0,
+    limit: int | None = None,
+    include_solar: bool = True,
+    samples: int = 24,
+) -> list[TonightObject]:
+    """Catalog objects that *will be* well-placed at any point during tonight's dark window.
+
+    Unlike :func:`visible_now` (a single instant), this samples the Sun-below-(-10°) window
+    (``astro.observing_window``) and keeps each object's peak altitude + the time it peaks, so you
+    can plan "what's worth imaging tonight" even for targets that haven't risen yet. Returns []
+    if there is no dark window in the next 24h. Ranked by curated ``grade`` then peak altitude.
+    """
+    when = when or datetime.now(UTC)
+    window = astro.observing_window(latitude, longitude, when)
+    if window is None:
+        return []
+    start, end = window
+    span = (end - start).total_seconds()
+    times = [start + timedelta(seconds=span * i / samples) for i in range(samples + 1)]
+
+    results: list[TonightObject] = []
+    for obj in load_catalog():
+        if obj.is_solar:
+            if not include_solar:
+                continue
+        elif not (obj.has_coordinates and (obj.grade or 0) >= min_grade):
+            continue
+        peak = -90.0
+        peak_time = start
+        try:
+            for t in times:
+                alt = obj.altitude(latitude, longitude, t)
+                if alt > peak:
+                    peak, peak_time = alt, t
+        except RuntimeError:  # ephem not installed; skip solar objects
+            continue
+        if peak >= min_altitude:
+            up_now = obj.altitude(latitude, longitude, start) >= min_altitude
+            results.append(
+                TonightObject(obj=obj, peak_altitude=peak, peak_time=peak_time, up_now=up_now)
+            )
+
+    results.sort(key=lambda v: (v.obj.grade or 0, v.peak_altitude), reverse=True)
     return results[:limit] if limit is not None else results

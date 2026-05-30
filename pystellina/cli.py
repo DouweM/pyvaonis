@@ -73,25 +73,31 @@ def watch(ip: str = const.DEFAULT_IP, seconds: int = 60) -> None:
 
 @app.command()
 def park(ip: str = const.DEFAULT_IP) -> None:
-    """Park the telescope."""
+    """Park the telescope. [IDLE ONLY — stop any observation first.]"""
     _print(_run(_with_client(ip, True, lambda s: s.park())))
 
 
 @app.command()
 def stop(ip: str = const.DEFAULT_IP) -> None:
-    """Stop the current observation."""
+    """Stop the current observation. [Requires an observation to be running.]"""
     _print(_run(_with_client(ip, True, lambda s: s.stop_observation())))
 
 
 @app.command()
 def reframe(x: int, y: int, rot: float = 0.0, ip: str = const.DEFAULT_IP) -> None:
-    """Change framing: nudge by x/y integer offsets, --rot degrees (takes control)."""
+    """Change framing: nudge by x/y integer offsets, --rot degrees (takes control).
+
+    [SAFE DURING OBSERVATION] — this is the app's "Change Framing".
+    """
     _print(_run(_with_client(ip, True, lambda s: s.adjust_framing(x, y, rot))))
 
 
 @app.command()
 def restart_autofocus(no_restart_capture: bool = False, ip: str = const.DEFAULT_IP) -> None:
-    """Re-run deep-sky autofocus (also restarts the stack unless --no-restart-capture)."""
+    """Re-run deep-sky autofocus (also restarts the stack unless --no-restart-capture).
+
+    [SAFE DURING OBSERVATION] — the app's "Restart autofocus".
+    """
     _print(
         _run(
             _with_client(
@@ -106,15 +112,20 @@ def multi_light(
     on: bool = typer.Option(..., "--on/--off", help="enable/disable Multi-Light (HDR)"),
     ip: str = const.DEFAULT_IP,
 ) -> None:
-    """Toggle Multi-Light / CovalENS HDR background (firmware >= 2.28)."""
+    """Multi-Light: toggle the CovalENS HDR-background image mode (a setting; firmware >= 2.28).
+
+    [SAFE DURING OBSERVATION] Distinct from `multi-night` despite the similar name: this changes
+    HOW frames are processed (HDR), not whether the stack is kept across nights.
+    """
     _print(_run(_with_client(ip, True, lambda s: s.set_multi_light(on))))
 
 
 @app.command()
-def enable_multi_night(ip: str = const.DEFAULT_IP) -> None:
-    """Enable multi-night: keep the current stack so it can resume on a later night.
+def multi_night(ip: str = const.DEFAULT_IP) -> None:
+    """Multi-night: mark the current stack resumable so it can keep integrating on a later night.
 
-    (The app's "Save to phone/Singularity" is an image download/cloud upload, not this.)
+    [SAFE DURING OBSERVATION] (capture/setToBeResumable.) Distinct from `multi-light` (HDR mode).
+    The app's "Save to phone/Singularity" is an image download/cloud upload — a different thing.
     """
     _print(_run(_with_client(ip, True, lambda s: s.enable_multi_night())))
 
@@ -137,7 +148,7 @@ def shutdown(
 def autoinit(
     lat: float, lon: float, ip: str = const.DEFAULT_IP, skip_autofocus: bool = False
 ) -> None:
-    """Initialise/align at a location."""
+    """Initialise/align at a location. [IDLE ONLY.]"""
     _print(
         _run(
             _with_client(
@@ -161,7 +172,7 @@ def observe(
     ),
     ip: str = const.DEFAULT_IP,
 ) -> None:
-    """Slew to a target and start imaging."""
+    """Slew to a target and start imaging. [IDLE ONLY unless --replace, which takes over.]"""
     body = ObservationBody(
         object_id=object_id,
         object_name=object_name,
@@ -182,21 +193,43 @@ def tonight(
     min_grade: float = 0.0,
     limit: int = 20,
     require_dark: bool = False,
+    window: bool = typer.Option(
+        False, "--window/--now", help="best targets across tonight's whole dark window vs right now"
+    ),
 ) -> None:
-    """List catalog objects currently visible at a location (offline, no telescope).
+    """List catalog objects visible at a location (offline, no telescope).
 
-    Pass --require-dark to only list targets when the Sun is below -10deg (as the app does).
+    Default lists what's up *right now* (add --require-dark to gate on the Sun being below -10deg).
+    Pass --window for "what's worth imaging *tonight*": the peak altitude each object reaches over
+    tonight's dark window and when it peaks (UTC), including targets that haven't risen yet.
     """
     from .astro import is_dark
     from .astro import observing_window
     from .catalog import visible_now
+    from .catalog import visible_tonight
 
     dark = is_dark(lat, lon)
-    window = observing_window(lat, lon)
+    win = observing_window(lat, lon)
     typer.echo(
         f"dark now: {dark}"
-        + (f"  (dark window {window[0]:%H:%M}-{window[1]:%H:%M} UTC)" if window else "")
+        + (f"  (dark window {win[0]:%H:%M}-{win[1]:%H:%M} UTC)" if win else "  (no dark window)")
     )
+
+    if window:
+        rows = visible_tonight(
+            lat, lon, min_altitude=min_altitude, min_grade=min_grade, limit=limit
+        )
+        for v in rows:
+            mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
+            flag = "up now " if v.up_now else "rises  "
+            typer.echo(
+                f"{v.obj.display_name:<22} peak {v.peak_altitude:5.1f}deg @ {v.peak_time:%H:%M}Z "
+                f"{flag} grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
+            )
+        if not rows:
+            typer.echo("no dark window tonight, or nothing clears the altitude filter")
+        return
+
     rows = visible_now(
         lat,
         lon,
@@ -214,7 +247,7 @@ def tonight(
     if not rows:
         typer.echo(
             "nothing to observe with those filters"
-            + (" (not dark yet)" if require_dark and not dark else "")
+            + (" (not dark yet — try --window to plan ahead)" if require_dark and not dark else "")
         )
 
 
@@ -256,7 +289,10 @@ def observe_object(
     ),
     ip: str = const.DEFAULT_IP,
 ) -> None:
-    """Slew to a catalog object by id/name (e.g. M42, Jupiter) using its recommended settings."""
+    """Slew to a catalog object by id/name using its recommended settings.
+
+    [IDLE ONLY unless --replace (default), which stops a running observation and takes over.]
+    """
     _print(_run(_with_client(ip, True, lambda s: s.observe_object(object_id, replace=replace))))
 
 
@@ -271,20 +307,47 @@ def observing(ip: str = const.DEFAULT_IP) -> None:
     _print(obs.model_dump() if obs is not None else {"observing": False})
 
 
+def _slugify(name: str) -> str:
+    """Filesystem-safe token from an object name (e.g. 'Sombrero Galaxy' -> 'Sombrero_Galaxy')."""
+    keep = "".join(c if c.isalnum() or c in "-_" else "_" for c in name).strip("_")
+    return keep or "stellina"
+
+
 @app.command()
-def image(out: str = "stellina.jpg", ip: str = const.DEFAULT_IP) -> None:
-    """Download the current live-stacked frame to a file."""
+def image(
+    out: str = typer.Option(
+        "", "--out", "-o", help="output path; default <object>_<frame>.jpg from the live frame"
+    ),
+    timeout: float = typer.Option(
+        120.0, "--timeout", help="seconds (the firmware renders the JPEG on demand — it is slow)"
+    ),
+    ip: str = const.DEFAULT_IP,
+) -> None:
+    """Download the current live-stacked frame (read-only; SAFE during an observation).
+
+    Default filename is the current object + frame index (e.g. M104_0042.jpg), so repeated runs
+    don't overwrite each other. NB: the scope renders this JPEG on demand, so a fetch can take tens
+    of seconds while it is also stacking — hence the generous --timeout. For instant access to
+    already-written frames, browse the FTP library (`stellina library`).
+    """
 
     async def _go(scope: StellinaClient) -> Any:
-        return await scope.fetch_current_image()
+        scope.request_timeout = timeout
+        img = scope.current_image()
+        obs = scope.current_observation()
+        data = await scope.fetch_image(img) if img else None
+        name = obs.object_name if obs and obs.object_name else "stellina"
+        default = f"{_slugify(name)}_{img.index:04d}.jpg" if img else "stellina.jpg"
+        return data, default
 
-    data = _run(_with_client(ip, False, _go))
+    data, default = _run(_with_client(ip, False, _go))
     if not data:
         typer.echo("no current image (telescope is not observing)")
         raise typer.Exit(1)
-    with open(out, "wb") as fh:
+    path = out or default
+    with open(path, "wb") as fh:
         fh.write(data)
-    typer.echo(f"wrote {len(data)} bytes to {out}")
+    typer.echo(f"wrote {len(data)} bytes to {path}")
 
 
 @app.command()
@@ -294,7 +357,10 @@ def export(
     format: str = "tiff",
     ip: str = const.DEFAULT_IP,
 ) -> None:
-    """Render and download a full-res capture (tiff|jxl) by captureId."""
+    """Render and download a full-res capture (tiff|jxl) by captureId.
+
+    [SAFE DURING OBSERVATION — but the on-demand render competes with stacking; can be slow.]
+    """
 
     async def _go(scope: StellinaClient) -> Any:
         return await scope.export_capture(capture_id, format)

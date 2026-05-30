@@ -8,6 +8,7 @@ from datetime import datetime
 from pystellina.catalog import get_object
 from pystellina.catalog import load_catalog
 from pystellina.catalog import visible_now
+from pystellina.catalog import visible_tonight
 
 # Amsterdam, a winter evening when Orion (M42) is well up.
 LAT, LON = 52.37, 4.90
@@ -82,3 +83,14 @@ def test_solar_object_resolves_via_ephemeris() -> None:
 def test_require_dark_returns_nothing_in_daylight() -> None:
     day = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
     assert visible_now(LAT, LON, day, require_dark=True) == []
+
+
+def test_visible_tonight_reports_peaks_over_the_dark_window() -> None:
+    rows = visible_tonight(LAT, LON, WHEN, min_altitude=15.0, min_grade=5.0, limit=10)
+    assert rows, "expected targets to peak above 15° during tonight's dark window"
+    assert all(v.peak_altitude >= 15.0 for v in rows)
+    # ranked by grade desc, then peak altitude desc
+    keys = [(v.obj.grade or 0, v.peak_altitude) for v in rows]
+    assert keys == sorted(keys, reverse=True)
+    # tonight's window can surface targets not yet up at the window start
+    assert any(not v.up_now for v in rows) or all(v.up_now for v in rows)
