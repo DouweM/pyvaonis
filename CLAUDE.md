@@ -152,7 +152,10 @@ stream*, not the socket emit. Mirror this:
   (silent `CONTROL_ERROR`; the app disables its take-control button then). `take_control` raises a
   clear "release it on the other device" error on timeout. Our per-command flow (connect →
   take_control → act → disconnect) releases control on exit (and the socket close also frees it);
-  releasing does NOT stop a started observation/plan — the scope runs on autonomously.
+  releasing does NOT stop a started observation/plan — the scope runs on autonomously. **HA**
+  connects **read-only** (coordinator does not take control) so it coexists with the phone; buttons/
+  select/services take control on demand (and hold it on the persistent socket until the Release-
+  control button), and surface contention as a clean HomeAssistantError.
 - Catalog (`tools/extract_catalog.py`) now also bundles the app's object-card data: distance/unit,
   realSize/unit, discoveredBy/In, shortTitle, resolved categoryLabel + constellationName, and the
   per-object `trivia` fun-facts (from `objects_<id>_trivia`). Surfaced in `stellina info` (a card),

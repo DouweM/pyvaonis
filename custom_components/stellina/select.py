@@ -12,8 +12,10 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from pystellina import StellinaError
 from pystellina import visibility_rating
 from pystellina import visible_now
 
@@ -64,7 +66,9 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
             {
                 "name": v.obj.display_name,
                 "altitude": round(v.altitude, 1),
-                "visibility": visibility_rating(v.altitude),  # good / poor / not_visible (app's color)
+                "visibility": visibility_rating(
+                    v.altitude
+                ),  # good / poor / not_visible (app's color)
                 "recommended_minutes": v.obj.duration or None,
                 "grade": v.obj.grade,
                 "magnitude": v.obj.magnitude,
@@ -90,7 +94,10 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Take control and start observing the chosen object."""
         client = self.coordinator.client
-        await client.take_control()
-        await client.observe_object(option, replace=True)
+        try:
+            await client.take_control()
+            await client.observe_object(option, replace=True)
+        except StellinaError as err:
+            raise HomeAssistantError(str(err)) from err
         self._attr_current_option = option
         self.async_write_ha_state()

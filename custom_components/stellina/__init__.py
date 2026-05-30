@@ -16,12 +16,28 @@ from homeassistant.core import ServiceResponse
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
+from pystellina import StellinaError
+
 from .const import DOMAIN
 from .coordinator import StellinaConfigEntry
 from .coordinator import StellinaCoordinator
 from .http import register_view
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _guard_service(handler):  # type: ignore[no-untyped-def]
+    """Wrap a service handler so telescope errors surface as a clean HomeAssistantError."""
+
+    @functools.wraps(handler)
+    async def wrapper(call: ServiceCall):  # type: ignore[no-untyped-def]
+        try:
+            return await handler(call)
+        except StellinaError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    return wrapper
+
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -142,7 +158,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_EXPORT_CAPTURE,
-        export_capture,
+        _guard_service(export_capture),
         schema=EXPORT_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -190,11 +206,11 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_RUN_PLAN,
-        run_plan,
+        _guard_service(run_plan),
         schema=RUN_PLAN_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(DOMAIN, SERVICE_STOP_PLAN, stop_plan)
+    hass.services.async_register(DOMAIN, SERVICE_STOP_PLAN, _guard_service(stop_plan))
 
     async def observe(call: ServiceCall) -> None:
         """Slew to a catalog object (by id/name/designation) and start imaging."""
@@ -202,7 +218,9 @@ def _register_services(hass: HomeAssistant) -> None:
             call.data["target"], allow_solar=call.data["allow_solar"], replace=True
         )
 
-    hass.services.async_register(DOMAIN, SERVICE_OBSERVE, observe, schema=OBSERVE_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_OBSERVE, _guard_service(observe), schema=OBSERVE_SCHEMA
+    )
 
     async def autoinit(call: ServiceCall) -> None:
         """Initialise/align the telescope (defaults to Home Assistant's configured location)."""
@@ -229,10 +247,15 @@ def _register_services(hass: HomeAssistant) -> None:
             saturation=call.data.get("saturation"),
         )
 
-    hass.services.async_register(DOMAIN, SERVICE_AUTOINIT, autoinit, schema=AUTOINIT_SCHEMA)
     hass.services.async_register(
-        DOMAIN, SERVICE_ADJUST_FRAMING, adjust_framing, schema=ADJUST_FRAMING_SCHEMA
+        DOMAIN, SERVICE_AUTOINIT, _guard_service(autoinit), schema=AUTOINIT_SCHEMA
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_CAMERA_PARAMS, set_camera_params, schema=SET_CAMERA_PARAMS_SCHEMA
+        DOMAIN, SERVICE_ADJUST_FRAMING, _guard_service(adjust_framing), schema=ADJUST_FRAMING_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CAMERA_PARAMS,
+        _guard_service(set_camera_params),
+        schema=SET_CAMERA_PARAMS_SCHEMA,
     )

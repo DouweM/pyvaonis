@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.button import ButtonEntityDescription
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from pystellina import StellinaClient
+from pystellina import StellinaError
 
 from .coordinator import StellinaConfigEntry
 from .coordinator import StellinaCoordinator
@@ -23,6 +25,8 @@ class StellinaButtonDescription(ButtonEntityDescription):
     """Button description bound to a client coroutine."""
 
     press_fn: Callable[[StellinaClient], Awaitable[object]]
+    # Most actions need control; take it on demand first. False for the control buttons themselves.
+    takes_control: bool = True
 
 
 BUTTONS: tuple[StellinaButtonDescription, ...] = (
@@ -30,6 +34,7 @@ BUTTONS: tuple[StellinaButtonDescription, ...] = (
         key="take_control",
         translation_key="take_control",
         press_fn=lambda client: client.take_control(),
+        takes_control=False,
     ),
     StellinaButtonDescription(
         key="park",
@@ -50,6 +55,7 @@ BUTTONS: tuple[StellinaButtonDescription, ...] = (
         key="release_control",
         translation_key="release_control",
         press_fn=lambda client: client.release_control(),
+        takes_control=False,
     ),
     StellinaButtonDescription(
         key="restart_autofocus",
@@ -87,5 +93,11 @@ class StellinaButton(StellinaEntity, ButtonEntity):
         self.entity_description = description
 
     async def async_press(self) -> None:
-        """Execute the command."""
-        await self.entity_description.press_fn(self.coordinator.client)
+        """Take control if the action needs it, then execute — surfacing errors cleanly."""
+        client = self.coordinator.client
+        try:
+            if self.entity_description.takes_control:
+                await client.take_control()
+            await self.entity_description.press_fn(client)
+        except StellinaError as err:
+            raise HomeAssistantError(str(err)) from err

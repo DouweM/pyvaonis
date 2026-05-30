@@ -1,8 +1,9 @@
 """Push-based DataUpdateCoordinator for the Stellina integration.
 
-The telescope streams status over socket.io, so this coordinator connects once, takes
-control, and pushes each incoming status into Home Assistant via
-``async_set_updated_data`` rather than polling.
+The telescope streams status over socket.io, so this coordinator connects once and pushes each
+incoming status into Home Assistant via ``async_set_updated_data`` rather than polling. It connects
+**read-only** — it does NOT take control — so HA can monitor while the phone app stays in control;
+control is acquired on demand only when an action (a button/service/select) needs it.
 """
 
 from __future__ import annotations
@@ -46,12 +47,10 @@ class StellinaCoordinator(DataUpdateCoordinator[StellinaStatus]):
         self.async_set_updated_data(status)
 
     async def _async_update_data(self) -> StellinaStatus:
-        """Connect (once) and take control; returns the current status."""
+        """Connect (once), read-only; returns the current status. Control is taken on demand."""
         try:
             if not self.client.connected:
-                status = await self.client.connect()
-                await self.client.take_control()
-                return status
+                return await self.client.connect()
         except StellinaError as err:
             raise UpdateFailed(str(err)) from err
         if self.data is None:  # pragma: no cover - defensive

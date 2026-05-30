@@ -328,7 +328,11 @@ the CLI: `stellina plan M42:30 M51:20 … LAT LON --wait-for-dark`.
 
 This repo doubles as a HACS custom integration in
 [`custom_components/stellina`](custom_components/stellina). It wraps `pystellina` and a push-based
-`DataUpdateCoordinator` fed by the socket.io stream.
+`DataUpdateCoordinator` fed by the socket.io stream. **It connects read-only** — it monitors without
+taking control, so it coexists with the phone app; control is acquired on demand only when you press
+a control button / select a target / call a service, and handed back with the *Release control*
+button. (The firmware allows one controller at a time, so an action will fail with a clear message
+if the phone currently holds control — release it there first.)
 
 **Install (HACS):** add this repo as a custom repository (category *Integration*), install, restart,
 then add the *Stellina* integration and set the host (default `10.0.0.1`). The integration's
