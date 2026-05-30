@@ -190,6 +190,45 @@ def stop(ip: str = DEFAULT_IP) -> None:
 
 
 @app.command(rich_help_panel=PANEL_CONTROL)
+def take_control(
+    seconds: float = typer.Option(0.0, "--seconds", help="hold for N seconds (0 = until Ctrl-C)"),
+    ip: str = DEFAULT_IP,
+) -> None:
+    """Take control and HOLD it (demoting the phone) until Ctrl-C (or --seconds).
+
+    Control is tied to this connection, so it's released the moment the command exits — it can't
+    persist across separate commands. Use it to lock the scope to pystellina while you work; for a
+    scripted multi-step session, hold one Python `async with StellinaClient()` instead. Fails fast
+    if another device currently holds control (release it there first).
+    """
+
+    async def _hold() -> None:
+        async with StellinaClient(ip=ip) as scope:
+            await scope.take_control()
+            typer.secho(
+                f"holding control as {scope.device_id} (phone demoted). Ctrl-C to release.",
+                fg=typer.colors.GREEN,
+            )
+            with contextlib.suppress(asyncio.CancelledError, KeyboardInterrupt):
+                await asyncio.sleep(seconds if seconds else 86400)
+        typer.echo("released control")
+
+    with contextlib.suppress(KeyboardInterrupt):
+        _run(_hold())
+
+
+@app.command(rich_help_panel=PANEL_CONTROL)
+def release_control(ip: str = DEFAULT_IP) -> None:
+    """Release control, handing the telescope back (only affects control held by this client)."""
+    _print(_run(_with_client(ip, False, lambda s: _ret_release(s))))
+
+
+async def _ret_release(scope: StellinaClient) -> dict[str, Any]:
+    await scope.release_control()
+    return {"released": True}
+
+
+@app.command(rich_help_panel=PANEL_CONTROL)
 def reframe(x: int, y: int, rot: float = 0.0, ip: str = DEFAULT_IP) -> None:
     """Change framing: nudge by x/y integer offsets, --rot degrees (takes control).
 
