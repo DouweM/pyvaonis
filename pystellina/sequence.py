@@ -87,7 +87,9 @@ async def run_sequence(
                 await _emit(on_event, SequenceEvent("skipped", item, {"reason": "no longer dark"}))
                 break
             try:
-                await client.observe_object(item.target)
+                # replace=True: stop the previous target's stack and wait for idle before
+                # slewing to this one (the loop hands off target-to-target without an explicit stop).
+                await client.observe_object(item.target, replace=True)
             except Exception as err:
                 await _emit(on_event, SequenceEvent("skipped", item, {"error": str(err)}))
                 continue

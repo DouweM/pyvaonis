@@ -85,7 +85,30 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
 - HA: media-source over `/files`/FTP `/system/captures`; HA service/UI for sequences exists (`run_plan`).
 - Confirm planner/playlist/sun bodies if those features are wanted.
 
+## Control / observation ordering (mirrors the app — verified in decompiled source)
+The app gates every REST command on `connectedAsMaster`, which only flips true when a
+`STATUS_UPDATED` shows `masterDeviceId == deviceId`. So control is confirmed *via the status
+stream*, not the socket emit. Mirror this:
+- `take_control(wait=True)` (default) emits `takeControl`+`setUserName` then **blocks until the
+  status stream confirms `masterDeviceId` is us** (`_wait_for_status`). Without this, the next
+  command races the echo and fails `_require_control` ("does not hold control"). Returns early if
+  already master.
+- The app **refuses** `startObservation` while `currentOperation != null` (it does *not* auto-replace).
+  `start_observation`/`observe_object` default to that refusal; pass **`replace=True`** to stop a
+  running *observation* and `_wait_idle()` (status shows `currentOperation` cleared) before starting
+  the new target. A `stopObservation` POST returns before the op actually clears, hence the wait.
+  CLI `observe`/`observe-object` default `--replace` ON; `run_sequence` and the HA observe/select use it.
+- App preconditions for startObservation (all enforced): not shuttingDown, connected,
+  connectedAsMaster, not blocked, `currentOperation == null`, `initialized == true`.
+- **CLI is one control-session per process**: each `stellina <cmd>` connects → `take_control` →
+  acts → `disconnect()` which **releases control**. So `stellina stop` then `stellina observe` are
+  two separate take/release cycles (control drops between them; the phone could grab it back). For a
+  held multi-step session use ONE Python `async with StellinaClient()` block or the `sequence`
+  command (single session across all targets).
+
 ## Gotchas
 - It's EIO3, not python-socketio. Status event is `STATUS_UPDATED`; observation under `currentOperation`.
 - Use a stable `device_id` (default is MAC-derived) or `connectedDevices` piles up.
 - `app/setSettings` may replace rather than merge — `set_multi_light` echoes current settings to be safe.
+- `take_control` waits for the status echo; if you ever call it `wait=False`, don't issue a command
+  in the same tick.

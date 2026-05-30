@@ -87,6 +87,6 @@ class StellinaTargetSelect(StellinaEntity, SelectEntity):
         """Take control and start observing the chosen object."""
         client = self.coordinator.client
         await client.take_control()
-        await client.observe_object(option)
+        await client.observe_object(option, replace=True)
         self._attr_current_option = option
         self.async_write_ha_state()

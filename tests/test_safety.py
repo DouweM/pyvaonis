@@ -90,6 +90,35 @@ async def test_observe_refused_when_uninitialized() -> None:
         await c.start_observation(ObservationBody(object_name="x", ra=10.0, de=20.0))
 
 
+async def test_observe_refused_when_busy_without_replace() -> None:
+    c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
+    with pytest.raises(StellinaCommandError, match="already running"):
+        await c.start_observation(ObservationBody(object_name="x", ra=10.0, de=20.0))
+
+
+async def test_observe_replace_stops_running_observation_then_starts() -> None:
+    c = _client(currentOperation={"type": "OBSERVATION", "stopped": False})
+    seen: list[str] = []
+
+    async def fake_post(endpoint: str, body: Any = None, **k: Any) -> dict[str, Any]:
+        seen.append(endpoint)
+        return {"success": True}
+
+    async def fake_wait_idle(*, timeout: float = 30.0) -> None:
+        # The firmware would clear currentOperation; simulate that so the start guard passes.
+        c.status = _client().status  # idle, initialised, we hold control
+
+    c.post = fake_post  # type: ignore[method-assign]
+    c._wait_idle = fake_wait_idle  # type: ignore[method-assign]
+
+    sun_ra, sun_dec = astro.sun_position(datetime.now(UTC))
+    await c.start_observation(
+        ObservationBody(object_name="anti-sun", ra=(sun_ra + 180.0) % 360.0, de=-sun_dec),
+        replace=True,
+    )
+    assert seen == ["general/stopObservation", "general/startObservation"]
+
+
 async def test_observe_blocks_near_sun() -> None:
     c = _client()
     sun_ra, sun_dec = astro.sun_position(datetime.now(UTC))

@@ -206,16 +206,56 @@ class StellinaClient:
         else:
             await self._sock.emit(const.SOCKET_EVENT, key, value)
 
-    async def take_control(self) -> None:
+    async def _wait_for_status(
+        self, predicate: Callable[[StellinaStatus], bool], *, timeout: float, desc: str
+    ) -> None:
+        """Block until a pushed status satisfies ``predicate`` (or raise on timeout).
+
+        Control and operation state only become true once the telescope echoes them back in the
+        ``STATUS_UPDATED`` stream — the same signal the app waits on (``connectedAsMaster`` /
+        ``currentOperation``). Polling our cached ``self.status`` synchronously races that echo.
+        """
+        event = asyncio.Event()
+
+        def _check(status: StellinaStatus) -> None:
+            if predicate(status):
+                event.set()
+
+        self._status_callbacks.append(_check)
+        try:
+            if self.status is not None and predicate(self.status):
+                return
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+        except TimeoutError as err:
+            raise StellinaCommandError(
+                f"timed out after {timeout:.0f}s waiting for {desc}"
+            ) from err
+        finally:
+            self._status_callbacks.remove(_check)
+
+    async def take_control(self, *, wait: bool = True, timeout: float = 10.0) -> None:
         """Become the controlling ("master") device.
 
         Note: this forcibly takes control — if the owner's phone app currently holds it, it will
         be demoted. (The phone can take it back, after which our commands will start failing.)
+
+        With ``wait`` (default), block until the status stream confirms ``masterDeviceId`` is us —
+        otherwise the immediately-following command races the confirmation and fails its
+        ``_require_control`` guard. This mirrors the app, which only enables commands once it sees
+        ``connectedAsMaster``.
         """
-        if self.status and self.status.master_device_id and not self.has_control:
+        if self.has_control:
+            return
+        if self.status and self.status.master_device_id:
             _LOGGER.warning("taking control from current master %s", self.status.master_device_id)
         await self._emit(const.MSG_TAKE_CONTROL)
         await self._emit(const.MSG_SET_USER_NAME, {"device": self.device_id, "user": self.name})
+        if wait:
+            await self._wait_for_status(
+                lambda s: s.master_device_id == self.device_id,
+                timeout=timeout,
+                desc="control confirmation (masterDeviceId)",
+            )
 
     async def release_control(self) -> None:
         """Give up control."""
@@ -245,6 +285,18 @@ class StellinaClient:
             raise StellinaCommandError(
                 f"{action}: an operation is already running ({busy}); stop it first"
             )
+
+    async def _wait_idle(self, *, timeout: float = 30.0) -> None:
+        """Block until no operation is running (``currentOperation`` cleared or stopped).
+
+        A ``stopObservation`` POST returns immediately, but the firmware keeps ``currentOperation``
+        in the status until it has actually wound the stack down — so an immediate
+        ``startObservation`` still trips the busy guard. The app waits for the status to clear; so
+        do we.
+        """
+        await self._wait_for_status(
+            lambda s: not s.is_busy, timeout=timeout, desc="telescope to become idle"
+        )
 
     @staticmethod
     def _guard_endpoint(endpoint: str, *, allow_unsafe: bool) -> None:
@@ -370,15 +422,37 @@ class StellinaClient:
         return await self.post(const.Endpoint.STOP_AUTOINIT)
 
     async def start_observation(
-        self, observation: ObservationBody, *, allow_solar: bool = False
+        self,
+        observation: ObservationBody,
+        *,
+        allow_solar: bool = False,
+        replace: bool = False,
+        stop_timeout: float = 30.0,
     ) -> dict[str, Any]:
         """Slew to a target and start imaging.
 
         Refuses unless the scope is initialised and idle, and (without ``allow_solar``) refuses
         targets within ~10° of the Sun.
+
+        The app refuses to start an observation while another operation is running. With
+        ``replace=True`` we mirror "just switch targets": if an *observation* is already running we
+        stop it and wait for the telescope to go idle (up to ``stop_timeout``) before starting the
+        new one. A non-observation operation (auto-init, park, plan) is never auto-stopped.
         """
-        self._require_idle("start_observation")
+        self._require_control("start_observation")
         assert self.status is not None
+        busy = self.status.active_operation
+        if busy:
+            obs = self.current_observation()
+            if not (replace and obs is not None):
+                hint = "stop it first" if obs is not None else "stop that operation first"
+                raise StellinaCommandError(
+                    f"start_observation: an operation is already running ({busy}); {hint}"
+                    + ("" if obs is None else " or pass replace=True")
+                )
+            _LOGGER.info("replace=True: stopping running observation before starting new target")
+            await self.stop_observation()
+            await self._wait_idle(timeout=stop_timeout)
         if not self.status.initialized:
             raise StellinaCommandError(
                 "start_observation: telescope not initialised; run autoinit first"
@@ -393,8 +467,13 @@ class StellinaClient:
                 )
         return await self.post(const.Endpoint.START_OBSERVATION, observation.to_payload())
 
-    async def observe_object(self, object_id: str, *, allow_solar: bool = False) -> dict[str, Any]:
-        """Slew to a catalog object (by id or name) using its recommended settings."""
+    async def observe_object(
+        self, object_id: str, *, allow_solar: bool = False, replace: bool = False
+    ) -> dict[str, Any]:
+        """Slew to a catalog object (by id or name) using its recommended settings.
+
+        ``replace=True`` stops a running observation first (see :meth:`start_observation`).
+        """
         from .catalog import get_object
 
         obj = get_object(object_id)
@@ -404,7 +483,7 @@ class StellinaClient:
             observation = obj.to_observation()  # resolves ephemeris for solar objects
         except RuntimeError as err:  # ephem not installed for a solar object
             raise StellinaCommandError(str(err)) from err
-        return await self.start_observation(observation, allow_solar=allow_solar)
+        return await self.start_observation(observation, allow_solar=allow_solar, replace=replace)
 
     async def stop_observation(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_OBSERVATION)

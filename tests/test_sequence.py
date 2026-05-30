@@ -20,7 +20,7 @@ class FakeClient:
     async def take_control(self) -> None:
         self.calls.append("take_control")
 
-    async def observe_object(self, target: str) -> dict:
+    async def observe_object(self, target: str, *, replace: bool = False) -> dict:
         self.calls.append(f"observe:{target}")
         return {"success": True}
 
@@ -70,7 +70,7 @@ async def test_runs_targets_then_parks_and_shuts_down() -> None:
 async def test_failed_target_is_skipped_not_fatal() -> None:
     client = FakeClient()
 
-    async def boom(target: str) -> dict:
+    async def boom(target: str, *, replace: bool = False) -> dict:
         client.calls.append(f"observe:{target}")
         raise RuntimeError("unknown object")
 

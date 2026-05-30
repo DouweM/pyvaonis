@@ -156,6 +156,9 @@ def observe(
     gain: int | None = None,
     exposure_us: int | None = None,
     no_stacking: bool = False,
+    replace: bool = typer.Option(
+        True, "--replace/--no-replace", help="stop a running observation first (take over)"
+    ),
     ip: str = const.DEFAULT_IP,
 ) -> None:
     """Slew to a target and start imaging."""
@@ -168,7 +171,7 @@ def observe(
         exposure_micro_sec=exposure_us,
         do_stacking=not no_stacking,
     )
-    _print(_run(_with_client(ip, True, lambda s: s.start_observation(body))))
+    _print(_run(_with_client(ip, True, lambda s: s.start_observation(body, replace=replace))))
 
 
 @app.command()
@@ -246,9 +249,15 @@ def info(object_id: str) -> None:
 
 
 @app.command()
-def observe_object(object_id: str, ip: str = const.DEFAULT_IP) -> None:
+def observe_object(
+    object_id: str,
+    replace: bool = typer.Option(
+        True, "--replace/--no-replace", help="stop a running observation first (take over)"
+    ),
+    ip: str = const.DEFAULT_IP,
+) -> None:
     """Slew to a catalog object by id/name (e.g. M42, Jupiter) using its recommended settings."""
-    _print(_run(_with_client(ip, True, lambda s: s.observe_object(object_id))))
+    _print(_run(_with_client(ip, True, lambda s: s.observe_object(object_id, replace=replace))))
 
 
 @app.command()

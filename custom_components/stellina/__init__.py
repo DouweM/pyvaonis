@@ -178,7 +178,7 @@ def _register_services(hass: HomeAssistant) -> None:
     async def observe(call: ServiceCall) -> None:
         """Slew to a catalog object (by id/name/designation) and start imaging."""
         await _first_coordinator().client.observe_object(
-            call.data["target"], allow_solar=call.data["allow_solar"]
+            call.data["target"], allow_solar=call.data["allow_solar"], replace=True
         )
 
     hass.services.async_register(DOMAIN, SERVICE_OBSERVE, observe, schema=OBSERVE_SCHEMA)
