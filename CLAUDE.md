@@ -111,7 +111,7 @@ stream*, not the socket emit. Mirror this:
 - **CLI is one control-session per process**: each `vaonis <cmd>` connects → `take_control` →
   acts → `disconnect()` which **releases control**. So `vaonis stop` then `vaonis observe` are
   two separate take/release cycles (control drops between them; the phone could grab it back). For a
-  held multi-step session use ONE Python `async with StellinaClient()` block. (A native `plan` does
+  held multi-step session use ONE Python `async with VaonisClient()` block. (A native `plan` does
   not need a held session at all — the firmware runs it.)
 
 ## Gotchas

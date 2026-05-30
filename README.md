@@ -167,9 +167,9 @@ vaonis plan M42:30 "Andromeda Galaxy:45" Jupiter:10 52.37 4.90 --wait-for-dark
 ## Library reference
 
 ```python
-from pyvaonis import StellinaClient, ObservationBody, visible_now, get_object, PlanItem
+from pyvaonis import VaonisClient, ObservationBody, visible_now, get_object, PlanItem
 
-async with StellinaClient(ip="10.0.0.1") as scope:   # opens socket.io, waits for first status
+async with VaonisClient(ip="10.0.0.1") as scope:   # opens socket.io, waits for first status
     await scope.take_control()
     print(scope.status.model, scope.status.master_device_id)
 
@@ -183,7 +183,7 @@ async with StellinaClient(ip="10.0.0.1") as scope:   # opens socket.io, waits fo
 ```
 
 Key surfaces:
-- `StellinaClient` — `connect/disconnect`, `take_control/release_control`, `start_autoinit`,
+- `VaonisClient` — `connect/disconnect`, `take_control/release_control`, `start_autoinit`,
   `start_observation/observe_object/stop_observation`, `start_plan/stop_plan/plan_progress`,
   `park`, `request_shutdown`, `switch_frequency`,
   `current_observation/current_image/recent_images/fetch_current_image`,
@@ -407,7 +407,7 @@ Stellina**, and its **WAN Ethernet** plugs into your target VLAN:
    (e.g. `10.3.142.50`). This IP is what clients talk to.
 3. GL **port forwards** (WAN → the repeater-side scope), 1:1 ports so image URLs keep working:
    `TCP 8082 → 10.0.0.1:8082`, `8083 → 10.0.0.1:8083`, `21 → 10.0.0.1:21`.
-4. Point pyvaonis / the HA integration at the GL's VLAN IP (`StellinaClient(ip="10.3.142.50")`).
+4. Point pyvaonis / the HA integration at the GL's VLAN IP (`VaonisClient(ip="10.3.142.50")`).
    REST, socket.io, live images and full-res export all ride HTTP on 8082/8083 — done.
 5. FTP (saved library) is passive-mode: install the router's FTP NAT helper
    (`opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`) so dynamic passive ports are forwarded.
@@ -424,8 +424,8 @@ This mirrors the common "GL.iNet + Ethernet + port-forward" pattern, except the 
 pyvaonis/                 # the library (flat layout)
   const.py                  # IP, ports, endpoints, URL helpers
   auth.py                   # Ed25519 challenge → Authorization header (embedded keys)
-  models.py                 # StellinaStatus, ObservationBody, AutoInitBody
-  client.py                 # StellinaClient: socket.io + REST + images + export + ftp
+  models.py                 # VaonisStatus, ObservationBody, AutoInitBody
+  client.py                 # VaonisClient: socket.io + REST + images + export + ftp
   catalog.py                # bundled catalog, get_object, visible_now
   astro.py                  # sun position, is_dark, observing_window, ephemerides
   observation.py            # ObservationProgress, LiveImage, recent_images
@@ -467,12 +467,28 @@ validates the integration with hassfest + HACS. `publish.yml` builds and publish
 ## Extending
 
 - **New REST command**: add the path to `const.Endpoint`, a typed body to `models.py` if needed, and
-  a method on `StellinaClient` (sign via `self.post/get`). Mirror `StellinaAPI` in `PROTOCOL.md §4`.
-- **New status field**: it's already in `status.raw`; add a typed accessor to `StellinaStatus` or a
+  a method on `VaonisClient` (sign via `self.post/get`). Mirror `StellinaAPI` in `PROTOCOL.md §4`.
+- **New status field**: it's already in `status.raw`; add a typed accessor to `VaonisStatus` or a
   parser in `observation.py`. Status uses `extra="allow"`, so unknown fields are preserved.
-- **New HA entity**: add a platform file using `StellinaEntity` (device wiring) + the coordinator;
+- **New HA entity**: add a platform file using `VaonisEntity` (device wiring) + the coordinator;
   register the `Platform` in `__init__.py` and a name in `strings.json`.
 - **Solar-system math** lives in `astro.py` (`ephem`); deep-sky geometry is pure-Python there too.
+
+### Other Vaonis models (Vespera, …)
+
+The whole Vaonis lineup is driven by one Singularity SDK (`com.vaonis.instruments.sdk`), so the
+**protocol is shared** — same REST endpoints, Engine.IO v3 socket + `STATUS_UPDATED`, Ed25519 auth,
+and `10.0.0.1:8082/8083` defaults — and `pyvaonis` should **connect, monitor, and control** any of
+them (`stellina`, `vespera`, `vespera1ed`, `vespera2`, `vespera3`, `vesperapro`, `vesperapro2`, …).
+Device/UI labels already resolve from `status.model` (`model_display_name`).
+
+**Only Stellina is hardware-validated.** The one model-specific piece is **capture tuning**: the
+bundled catalog's gain/exposure and `catalog._SOLAR_PARAMS_STELLINA` are Stellina's values, so on
+another model observations would run with valid-but-not-optimal exposures. The clean extension point
+is the app's `assets/catalog/observation_rules.json`, keyed by `(model, filter, objectType,
+objectId)` — bundle it and derive params from `status.model` at runtime. Worth verifying on real
+non-Stellina hardware first: still Engine.IO **v3** (not v4), the `customPort` flag in
+`StellinaContext`, and that the embedded auth keys are shared.
 
 ## Hardware validation
 

@@ -1,4 +1,4 @@
-"""Async client for a Vaonis Stellina over its local Wi-Fi API.
+"""Async client for a Vaonis smart telescope over its local Wi-Fi API.
 
 Lifecycle::
 
@@ -145,7 +145,7 @@ class VaonisClient:
 
     async def _on_control_error(self, payload: Any) -> None:
         self.last_control_error = payload
-        _LOGGER.warning("Stellina CONTROL_ERROR: %s", payload)
+        _LOGGER.warning("Vaonis CONTROL_ERROR: %s", payload)
 
     async def _on_any(self, event: str, *args: Any) -> None:
         if event == const.EVENT_STATUS:

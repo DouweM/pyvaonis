@@ -56,11 +56,11 @@ uses polling-first then upgrades; websocket-direct also works.
 | `setSystemTime`| `<epochMillis>`                    | set telescope clock |
 
 **Inbound** (telescope → client): event **`STATUS_UPDATED`**, whose single argument is the full
-status **JSON object** (not a string), parsed into `StellinaStatus`. Also **`CONTROL_ERROR`** for
+status **JSON object** (not a string), parsed into `VaonisStatus`. Also **`CONTROL_ERROR`** for
 control errors. The server pushes `STATUS_UPDATED` on its own cadence after connect — no emit is
 required first. (`connect`/`disconnect`/`reconnect`/`error` are lifecycle events.)
 
-`StellinaStatus` carries (selected): `challenge`, `telescopeId`, `bootCount`, `initialized`,
+`VaonisStatus` carries (selected): `challenge`, `telescopeId`, `bootCount`, `initialized`,
 `masterDeviceId` (who has control), `model`, `internalBattery`, `motors`, `network`, `filter`,
 `position`, `currentOperation` + per-mode operation objects (observation, autoInit, park,
 dark, plan, playlist, sunMode, storageAcquisition).

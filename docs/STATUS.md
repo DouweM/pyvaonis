@@ -3,7 +3,7 @@
 The telescope pushes its full state as the socket.io **`STATUS_UPDATED`** event (a JSON object), and
 the same object is returned (wrapped as `{success, result: {...}}`) by `GET app/status`. Captured live
 from `stellina-f8bd80` while observing M104. `pyvaonis` keeps the whole thing in
-`StellinaStatus.raw` and types only the fields it needs (`models.py`, `observation.py`).
+`VaonisStatus.raw` and types only the fields it needs (`models.py`, `observation.py`).
 
 ## Top-level keys
 | key | type | notes |
