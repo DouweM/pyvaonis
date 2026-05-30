@@ -124,6 +124,20 @@ stream*, not the socket emit. Mirror this:
 - Live `image` is slow only via the on-demand render (`?androidImageIndex=&androidCaptureId=` makes
   firmware re-encode the JPEG). The frame is already on disk, so `image` defaults to the static file
   (`LiveImage.ftp_path` over FTP, or `static_url` = the bare path with no query). Same bytes, instant.
+- On connect the client emits `setSystemTime` (epoch ms) to sync the scope's clock, as the app
+  does — required because native plan windows are absolute epoch-ms and the firmware compares to its
+  own clock.
+- Auto-init verified faithful: `AutoInitBody` = `{longitude, latitude, time(epoch ms), observatoryId
+  (""), observatoryName, skipAutoFocus(false)}` — exact match to the app; `observatoryId=""` is
+  accepted. Init is required before `startObservation` (`initialized==true`); a native plan runs its
+  own auto-init (plan `state==AUTO_INIT`). Exposed as CLI `autoinit` + HA `autoinit` service. Init
+  step order (status `currentOperation` type AUTO_INIT): PREPARE_MC_BOARD→SEEK_STOP→OPEN_ARM→
+  TRY_POSITION→MOVING→WIDE_AUTOFOCUS→ASTROMETRY→START_TRACKING→AUTO_FOCUS (retry path on astrometry
+  fail). The arm is opened by init itself; no separate open step.
+- CLI ergo: `observe TARGET` (catalog) or `observe --ra/--de` (manual) — `observe-object` merged in;
+  `stop` stops a plan if one runs else the observation; commands grouped into --help panels; location
+  from arg→env(`STELLINA_LAT/LON`)→scope (shows observatory name); host `STELLINA_HOST`; times local;
+  expected errors print one line (`--debug` for trace). `image` defaults to the fast static fetch.
 - Native plan body = `PlanBody`/`PlanTargetBody` (Moshi `PlanMyNightBody`): per-target
   `startTime`/`endTime` epoch-ms windows + `params` (a full `ObservationBody`); `build_plan` lays
   them back-to-back from `target:minutes`. Plan status is `currentOperation.type=="PLAN"` with a

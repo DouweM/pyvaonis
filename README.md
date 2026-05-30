@@ -111,7 +111,17 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 
 ## CLI reference
 
-`stellina <command>` (all accept `--ip`, default `10.0.0.1`):
+`stellina <command>` (all accept `--ip`, default `10.0.0.1`). Set once in your environment to avoid
+retyping (and to dodge the negative-longitude arg-parsing footgun):
+
+```bash
+export STELLINA_HOST=10.0.0.1     # or your bridge IP
+export STELLINA_LAT=19.43 STELLINA_LON=-99.13
+```
+
+Location for `tonight`/`forecast`/`plan` resolves **arg → env → the scope's own position** (it knows
+its GPS/observatory location), and times print in your **local timezone**. Expected errors (no
+control, busy, unreachable) print one clean line; add `--debug` for the full traceback.
 
 | Command | What it does |
 |---|---|
@@ -120,13 +130,12 @@ Run from a machine joined to the telescope's Wi-Fi, or reachable via the [bridge
 | `observing` | Current observation: target, step, stacking count, integration |
 | `image [--out f.jpg] [--timeout S]` | Download the current live-stacked frame (auto-names `<object>_<frame>.jpg`) |
 | `tonight [LAT LON] [--now] [--min-grade G] [--limit N]` | Peak altitudes across tonight's dark window (`--now` for a right-now snapshot) |
-| `forecast LAT LON` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
+| `forecast [LAT LON]` | Is tonight worth it? Cloud forecast over the dark window + Moon → verdict |
 | `info OBJECT` | Full catalog detail (name, description, magnitude, …) for an object |
-| `observe-object OBJECT` | Slew to a catalog object (e.g. `M42`, `"Orion Nebula"`, `Jupiter`) |
-| `observe [--object-name … --ra … --de …]` | Slew to explicit coordinates |
-| `autoinit LAT LON [--skip-autofocus]` | Initialise / align at a location |
-| `stop` / `park` / `shutdown` | Stop observation / park / power off |
-| `plan T1:30 T2:20 … LAT LON [--name N] [--wait-for-dark] [--start-in MIN]` | Start the native autonomous Plan-My-Night |
+| `observe TARGET` / `observe --ra … --de …` | Slew to a catalog object (`M42`, `Jupiter`) or manual coordinates |
+| `autoinit [LAT LON] [--skip-autofocus]` | Initialise / align at a location |
+| `stop` / `park` / `shutdown` | Stop running op (plan or observation) / park / power off |
+| `plan T1:30 T2:20 … [--lat L --lon L] [--name N] [--wait-for-dark] [--start-in MIN]` | Start the native autonomous Plan-My-Night |
 | `stop-plan` | Cancel the running native plan |
 | `export CAPTURE_ID [--format tiff\|jxl] [--out f]` | Render & download full-res |
 | `library [PATH]` | List the saved FTP library (default `/user`) |

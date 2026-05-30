@@ -182,6 +182,12 @@ class StellinaClient:
                 "connected but received no STATUS_UPDATED with a 'challenge' "
                 "(check Engine.IO version / event name — run `stellina --debug watch`)"
             ) from err
+        # Sync the scope's clock from us, as the app does on connect — our plan windows are absolute
+        # epoch-ms, so the telescope must agree on "now".
+        try:
+            await self._emit(const.MSG_SET_SYSTEM_TIME, int(time.time() * 1000))
+        except Exception:
+            _LOGGER.debug("setSystemTime on connect failed (non-fatal)", exc_info=True)
         assert self.status is not None
         return self.status
 
@@ -534,6 +540,17 @@ class StellinaClient:
     def location(self) -> tuple[float, float] | None:
         """The telescope's own (latitude, longitude) from its status, or None if unknown."""
         return self.status.position if self.status else None
+
+    def observatory_name(self) -> str | None:
+        """The configured observatory/site name (set at auto-init), or None."""
+        raw = self.status.raw if self.status else {}
+        if name := raw.get("observatoryName"):
+            return name
+        ops = [raw.get("currentOperation"), *((raw.get("previousOperations") or {}).values())]
+        for op in ops:
+            if isinstance(op, dict) and (name := op.get("observatoryName")):
+                return name
+        return None
 
     def plan_progress(self) -> Any:
         """Parsed progress of the running native plan, or None when no plan is active."""

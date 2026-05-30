@@ -99,16 +99,17 @@ def _location(
     if use_scope and ip:
         try:
 
-            async def _fetch() -> tuple[float, float] | None:
+            async def _fetch() -> tuple[tuple[float, float] | None, str | None]:
                 async with StellinaClient(ip=ip) as scope:
-                    return scope.location()
+                    return scope.location(), scope.observatory_name()
 
-            pos = asyncio.run(_fetch())
+            pos, observatory = asyncio.run(_fetch())
         except StellinaError:
-            pos = None
+            pos, observatory = None, None
         if pos is not None:
+            where = f"observatory {observatory!r}" if observatory else "telescope"
             typer.secho(
-                f"(using telescope location {pos[0]:.3f}, {pos[1]:.3f})",
+                f"(using {where} location {pos[0]:.3f}, {pos[1]:.3f})",
                 fg=typer.colors.BRIGHT_BLACK,
                 err=True,
             )
@@ -123,14 +124,23 @@ def _print(data: Any) -> None:
     typer.echo(json.dumps(data, indent=2, default=str))
 
 
-@app.command()
+def _local(dt: Any) -> str:
+    """Format a UTC datetime in the machine's local timezone (e.g. '21:08 CST').
+
+    The telescope reports its location (lat/lon) but not a civil timezone, so we render in the
+    local zone of wherever the CLI runs — which is the observing site in practice.
+    """
+    return f"{dt.astimezone():%H:%M %Z}"
+
+
+@app.command(rich_help_panel=PANEL_DEBUG)
 def status(ip: str = DEFAULT_IP) -> None:
     """Connect and print one status snapshot (read-only)."""
     result = _run(_with_client(ip, False, lambda s: _ret(s.status.raw if s.status else {})))
     _print(result)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
     """Stream raw socket events (use to confirm event names / payloads)."""
 
@@ -148,19 +158,25 @@ def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
     _run(_watch())
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def park(ip: str = DEFAULT_IP) -> None:
     """Park the telescope. [IDLE ONLY — stop any observation first.]"""
     _print(_run(_with_client(ip, True, lambda s: s.park())))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def stop(ip: str = DEFAULT_IP) -> None:
-    """Stop the current observation. [Requires an observation to be running.]"""
-    _print(_run(_with_client(ip, True, lambda s: s.stop_observation())))
+    """Stop whatever is running — a native plan if one is active, else the current observation."""
+
+    async def _go(s: StellinaClient) -> Any:
+        if s.plan_progress() is not None:
+            return await s.stop_plan()
+        return await s.stop_observation()
+
+    _print(_run(_with_client(ip, True, _go)))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def reframe(x: int, y: int, rot: float = 0.0, ip: str = DEFAULT_IP) -> None:
     """Change framing: nudge by x/y integer offsets, --rot degrees (takes control).
 
@@ -169,7 +185,7 @@ def reframe(x: int, y: int, rot: float = 0.0, ip: str = DEFAULT_IP) -> None:
     _print(_run(_with_client(ip, True, lambda s: s.adjust_framing(x, y, rot))))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def restart_autofocus(no_restart_capture: bool = False, ip: str = DEFAULT_IP) -> None:
     """Re-run deep-sky autofocus (also restarts the stack unless --no-restart-capture).
 
@@ -184,7 +200,7 @@ def restart_autofocus(no_restart_capture: bool = False, ip: str = DEFAULT_IP) ->
     )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def multi_light(
     on: bool = typer.Option(..., "--on/--off", help="enable/disable Multi-Light (HDR)"),
     ip: str = DEFAULT_IP,
@@ -197,7 +213,7 @@ def multi_light(
     _print(_run(_with_client(ip, True, lambda s: s.set_multi_light(on))))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def multi_night(ip: str = DEFAULT_IP) -> None:
     """Multi-night: mark the current stack resumable so it can keep integrating on a later night.
 
@@ -207,7 +223,7 @@ def multi_night(ip: str = DEFAULT_IP) -> None:
     _print(_run(_with_client(ip, True, lambda s: s.enable_multi_night())))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def shutdown(
     ip: str = DEFAULT_IP,
     yes: bool = typer.Option(False, "--yes", help="confirm: powers off the scope; drops the link"),
@@ -221,7 +237,7 @@ def shutdown(
     _print(_run(_with_client(ip, True, lambda s: s.request_shutdown(force=True))))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def autoinit(
     lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT)"),
     lon: float | None = typer.Argument(None, help="longitude (default: $STELLINA_LON)"),
@@ -239,34 +255,53 @@ def autoinit(
     )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def observe(
-    object_name: str = "",
-    object_id: str = "",
-    ra: float | None = None,
-    de: float | None = None,
+    target: str = typer.Argument(
+        "", help="catalog id/designation/name (e.g. M42, Jupiter); omit to use --ra/--de"
+    ),
+    ra: float | None = typer.Option(None, "--ra", help="manual right ascension (deg)"),
+    de: float | None = typer.Option(None, "--de", help="manual declination (deg)"),
+    object_name: str = typer.Option("", "--name", help="label for a manual --ra/--de target"),
     gain: int | None = None,
     exposure_us: int | None = None,
     no_stacking: bool = False,
     replace: bool = typer.Option(
         True, "--replace/--no-replace", help="stop a running observation first (take over)"
     ),
+    allow_solar: bool = typer.Option(
+        False, "--allow-solar", help="permit Sun/near-Sun targets (solar filter only!)"
+    ),
     ip: str = DEFAULT_IP,
 ) -> None:
-    """Slew to a target and start imaging. [IDLE ONLY unless --replace, which takes over.]"""
-    body = ObservationBody(
-        object_id=object_id,
-        object_name=object_name,
-        ra=ra,
-        de=de,
-        gain=gain,
-        exposure_micro_sec=exposure_us,
-        do_stacking=not no_stacking,
-    )
-    _print(_run(_with_client(ip, True, lambda s: s.start_observation(body, replace=replace))))
+    """Slew to a target and start imaging — `observe M42`, or `observe --ra 83.8 --de -5.4`.
+
+    [IDLE ONLY unless --replace (default), which stops a running observation and takes over.]
+    A catalog target uses its recommended settings; --ra/--de starts a manual observation.
+    """
+    if target:
+
+        async def _go(s: StellinaClient) -> Any:
+            return await s.observe_object(target, replace=replace, allow_solar=allow_solar)
+    elif ra is not None and de is not None:
+        body = ObservationBody(
+            object_name=object_name,
+            ra=ra,
+            de=de,
+            gain=gain,
+            exposure_micro_sec=exposure_us,
+            do_stacking=not no_stacking,
+        )
+
+        async def _go(s: StellinaClient) -> Any:
+            return await s.start_observation(body, replace=replace, allow_solar=allow_solar)
+    else:
+        raise typer.BadParameter("give a catalog TARGET, or both --ra and --de for a manual target")
+
+    _print(_run(_with_client(ip, True, _go)))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PLAN)
 def tonight(
     lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
     lon: float | None = typer.Argument(
@@ -286,10 +321,10 @@ def tonight(
     """What's worth imaging *tonight* at a location.
 
     By default reports each object's peak altitude over tonight's dark window and when it peaks
-    (UTC), including targets that haven't risen yet — because "tonight" means the whole night, not
-    this instant. Pass --now for a snapshot of what's above the horizon right now (with optional
-    --require-dark to gate on darkness). Location comes from LAT/LON, else $STELLINA_LAT/LON, else
-    the connected telescope's own position.
+    (local time), including targets that haven't risen yet — because "tonight" means the whole
+    night, not this instant. Pass --now for a snapshot of what's above the horizon right now (with
+    optional --require-dark to gate on darkness). Location comes from LAT/LON, else $STELLINA_LAT/LON,
+    else the connected telescope's own position.
     """
     from .astro import is_dark
     from .astro import observing_window
@@ -301,7 +336,7 @@ def tonight(
     win = observing_window(lat, lon)
     typer.echo(
         f"dark now: {dark}"
-        + (f"  (dark window {win[0]:%H:%M}-{win[1]:%H:%M} UTC)" if win else "  (no dark window)")
+        + (f"  (dark window {_local(win[0])}-{_local(win[1])})" if win else "  (no dark window)")
     )
 
     if not now:
@@ -312,7 +347,7 @@ def tonight(
             mag = f"mag {v.obj.magnitude}" if v.obj.magnitude is not None else ""
             flag = "up now " if v.up_now else "rises  "
             typer.echo(
-                f"{v.obj.display_name:<22} peak {v.peak_altitude:5.1f}deg @ {v.peak_time:%H:%M}Z "
+                f"{v.obj.display_name:<22} peak {v.peak_altitude:5.1f}deg @ {_local(v.peak_time)} "
                 f"{flag} grade {v.obj.grade}  {v.obj.category or '':<18} {mag:<8} (id={v.obj.id})"
             )
         if not rows:
@@ -340,7 +375,7 @@ def tonight(
         )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PLAN)
 def forecast(
     lat: float | None = typer.Argument(None, help="latitude (default: $STELLINA_LAT or the scope)"),
     lon: float | None = typer.Argument(
@@ -357,16 +392,16 @@ def forecast(
     lat, lon = _location(lat, lon, ip=ip, use_scope=True)
     night = _run(assess_night(lat, lon))
     if night.dark_start and night.dark_end:
-        typer.echo(f"dark window {night.dark_start:%H:%M}-{night.dark_end:%H:%M} UTC")
+        typer.echo(f"dark window {_local(night.dark_start)}-{_local(night.dark_end)}")
     typer.echo(f"verdict: {night.verdict.upper()} — {night.reason}")
     for h in night.hours or []:
         layers = (
             f"low {h.cloud_low or 0:.0f} mid {h.cloud_mid or 0:.0f} high {h.cloud_high or 0:.0f}"
         )
-        typer.echo(f"  {h.time:%H:%M}Z  cloud {h.cloud_cover:3.0f}%  ({layers})")
+        typer.echo(f"  {_local(h.time)}  cloud {h.cloud_cover:3.0f}%  ({layers})")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PLAN)
 def info(object_id: str) -> None:
     """Show full catalog detail for an object (offline)."""
     from .catalog import get_object
@@ -380,22 +415,7 @@ def info(object_id: str) -> None:
         typer.echo("\n" + obj.description)
 
 
-@app.command()
-def observe_object(
-    object_id: str,
-    replace: bool = typer.Option(
-        True, "--replace/--no-replace", help="stop a running observation first (take over)"
-    ),
-    ip: str = DEFAULT_IP,
-) -> None:
-    """Slew to a catalog object by id/name using its recommended settings.
-
-    [IDLE ONLY unless --replace (default), which stops a running observation and takes over.]
-    """
-    _print(_run(_with_client(ip, True, lambda s: s.observe_object(object_id, replace=replace))))
-
-
-@app.command()
+@app.command(rich_help_panel=PANEL_LIVE)
 def observing(ip: str = DEFAULT_IP) -> None:
     """Show the current observation (target, step, stacking), read-only."""
 
@@ -420,7 +440,7 @@ def _slugify(name: str) -> str:
     return keep or "stellina"
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_LIVE)
 def image(
     out: str = typer.Option(
         "", "--out", "-o", help="output path; default <object>_<frame>.jpg from the live frame"
@@ -466,7 +486,7 @@ def image(
     typer.echo(f"wrote {len(data)} bytes to {path}")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_LIVE)
 def export(
     capture_id: str,
     out: str = "",
@@ -498,7 +518,7 @@ def export(
     typer.echo(f"wrote {len(data)} bytes to {path}")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_LIVE)
 def library(
     path: str = typer.Argument("/", help="FTP directory to list"),
     ip: str = DEFAULT_IP,
@@ -517,7 +537,7 @@ def library(
         typer.echo(f"(empty: {path})")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_LIVE)
 def download(path: str, out: str = "", ip: str = DEFAULT_IP) -> None:
     """Download a saved file from the library by its FTP path."""
     import os
@@ -532,7 +552,7 @@ def download(path: str, out: str = "", ip: str = DEFAULT_IP) -> None:
     typer.echo(f"wrote {len(data)} bytes to {target}")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def plan(
     targets: list[str],
     lat: float | None = typer.Option(None, "--lat", help="latitude (default: env or the scope)"),
@@ -580,13 +600,13 @@ def plan(
     _print(_run(_with_client(ip, True, _go)))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CONTROL)
 def stop_plan(ip: str = DEFAULT_IP) -> None:
     """Cancel the running native plan (planner/stopPlan)."""
     _print(_run(_with_client(ip, True, lambda s: s.stop_plan())))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def api(
     endpoint: str,
     method: str = typer.Option(
@@ -640,7 +660,7 @@ def api(
     raise typer.Exit(0 if result["status"] < 400 else 1)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def doctor(ip: str = DEFAULT_IP) -> None:
     """Probe connectivity to the telescope (reachability only — run this first)."""
 
@@ -694,7 +714,7 @@ def doctor(ip: str = DEFAULT_IP) -> None:
     raise typer.Exit(1 if failures else 0)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = DEFAULT_IP) -> None:
     """End-to-end checklist: connect, status, control, image, library, export.
 
@@ -794,7 +814,7 @@ def selftest(lat: float = 0.0, lon: float = 0.0, ip: str = DEFAULT_IP) -> None:
     raise typer.Exit(1 if _run(_go()) else 0)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def post(
     endpoint: str,
     json_body: str = "{}",
@@ -806,7 +826,7 @@ def post(
     _print(_run(_with_client(ip, True, lambda s: s.post(endpoint, body, allow_unsafe=unsafe))))
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_DEBUG)
 def get(endpoint: str, ip: str = DEFAULT_IP) -> None:
     """Raw signed GET of a ``/v1`` endpoint."""
     _print(_run(_with_client(ip, False, lambda s: s.get(endpoint))))
