@@ -56,7 +56,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Hassfest (validate custom integration)
         uses: home-assistant/actions/hassfest@master
-      - name: HACS validation
-        uses: hacs/action@main
-        with:
-          category: integration
+      # HACS store-submission validation (GitHub topics + home-assistant/brands listing) only
+      # matters for inclusion in the default HACS store; it does not affect installing this as a
+      # custom repository. Re-add `hacs/action@main` here if/when submitting to the public store.
