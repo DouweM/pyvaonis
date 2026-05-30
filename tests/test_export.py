@@ -32,15 +32,21 @@ async def test_export_tiff_posts_and_builds_url() -> None:
     assert url == "http://10.0.0.1:8082/exports/abc.tif"
 
 
-async def test_export_jxl_uses_get_query() -> None:
+async def test_export_jxl_posts_with_query_no_body() -> None:
     client = _client()
+    seen: dict[str, Any] = {}
 
-    async def fake_get(endpoint: str) -> dict[str, Any]:
-        assert endpoint == "capture/exportImageJpegXl?captureId=abc"
+    async def fake_request(method: str, endpoint: str, body: Any = None) -> dict[str, Any]:
+        seen.update(method=method, endpoint=endpoint, body=body)
         return {"result": {"url": "/exports/abc.jxl"}}
 
-    client.get = fake_get  # type: ignore[method-assign]
+    client.request = fake_request  # type: ignore[method-assign]
     assert await client.export_url("abc", "jxl") == "http://10.0.0.1:8082/exports/abc.jxl"
+    assert seen == {
+        "method": "POST",
+        "endpoint": "capture/exportImageJpegXl?captureId=abc",
+        "body": None,
+    }
 
 
 async def test_export_capture_downloads_bytes() -> None:

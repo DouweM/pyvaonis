@@ -505,7 +505,10 @@ class StellinaClient:
         if fmt == "tiff":
             resp = await self.request("POST", const.Endpoint.EXPORT_TIFF, {"captureId": capture_id})
         elif fmt == "jxl":
-            resp = await self.get(f"{const.Endpoint.EXPORT_JPEGXL}?captureId={capture_id}")
+            # POST with captureId as a query param and no body (StellinaAPI.getCaptureJXL).
+            resp = await self.request(
+                "POST", f"{const.Endpoint.EXPORT_JPEGXL}?captureId={capture_id}"
+            )
         else:
             raise StellinaCommandError(f"unknown export format: {fmt!r} (use 'tiff' or 'jxl')")
         url = (resp.get("result") or {}).get("url")

@@ -26,7 +26,10 @@ def http_url(ip: str, path: str, port: int = HTTP_PORT, root: str = HTTP_ROOT) -
 
 
 FTP_PORT: Final = 21
-FTP_ROOT: Final = "/user"  # saved observations live here (anonymous login)
+# Anonymous FTP. On firmware 2.35.7 the captures live under /system/captures (/system also has
+# bias, dark, history, logs, plan, reports, temp); /user was empty. HTTP serves the same images
+# at /files/captures/<storeId>/...
+FTP_ROOT: Final = "/system/captures"
 
 
 def socket_url(ip: str = DEFAULT_IP, port: int = SOCKET_PORT) -> str:

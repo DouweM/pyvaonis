@@ -3,9 +3,13 @@
 Async Python client, CLI, and Home Assistant integration for **Vaonis Stellina** smart
 telescopes, over the telescope's **local Wi-Fi API** — no Vaonis cloud, no account.
 
-Reverse-engineered from *Singularity by Vaonis* v1.38.10 (`com.vaonis.barnard`). The full
-wire protocol is documented in [`PROTOCOL.md`](PROTOCOL.md); this README is the usage +
-developer/agent reference.
+Reverse-engineered from *Singularity by Vaonis* v1.38.10 (`com.vaonis.barnard`), and confirmed
+against real hardware (firmware 2.35.7). Reference docs:
+- [`CLAUDE.md`](CLAUDE.md) — agent orientation / project handoff (read first for a fresh session)
+- [`PROTOCOL.md`](PROTOCOL.md) — the wire protocol (auth, socket, endpoints, catalog model)
+- [`docs/API.md`](docs/API.md) — every REST endpoint + body + pystellina coverage
+- [`docs/STATUS.md`](docs/STATUS.md) — the full status-object schema
+This README is the usage guide.
 
 > ⚠️ **Status: alpha, not yet run against hardware.** The crypto/auth, catalog, astronomy,
 > sequencing, parsing, the EIO3 frame codec, and the safety guards are unit-tested. The socket
