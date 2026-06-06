@@ -23,6 +23,9 @@ from homeassistant.util import dt as dt_util
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .http import get_media_cache
+from .media_cache import MediaCache
+from .media_cache import frame_key
 from .pyvaonis import observation_object_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +54,8 @@ class VaonisImage(VaonisEntity, ImageEntity):
         self._cached: bytes | None = None
         self._source: str | None = None
         self._target: str | None = None
+        self._frame_path: str | None = None  # FTP path of the last-fetched frame, for the cache key
+        self._media_cache: MediaCache | None = None
         self._refreshing = False
         self._stale = False
 
@@ -67,6 +72,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
     async def async_added_to_hass(self) -> None:
         """Kick off the first fetch so a frame is loaded without waiting for the next status push."""
         await super().async_added_to_hass()
+        self._media_cache = get_media_cache(self.hass)
         self._signature = self._signature_now()
         self._request_refresh()
 
@@ -99,6 +105,12 @@ class VaonisImage(VaonisEntity, ImageEntity):
                     # "5 days ago", not "now"); a changed timestamp also tells the frontend to refetch.
                     self._attr_image_last_updated = taken_at or dt_util.utcnow()
                     self.async_write_ha_state()
+                    # Proactively populate the gallery cache: we just downloaded this frame for
+                    # display, so persisting it (free) makes it instant in the media browser later —
+                    # especially each live frame during an observation, like the app does.
+                    if self._media_cache is not None and self._frame_path:
+                        entry_id = self.coordinator.config_entry.entry_id
+                        await self._media_cache.put(frame_key(entry_id, self._frame_path), data)
                 if target_changed:  # refresh the Latest target sensor, which reads the coordinator
                     self.coordinator.async_update_listeners()
         finally:
@@ -119,6 +131,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
             try:
                 data = await client.download_file(img.ftp_path)
                 self._source = "live"
+                self._frame_path = img.ftp_path
                 obs = client.current_observation()
                 self._target = obs.object_name if obs else None
                 return data, dt_util.utcnow()  # live frame: just captured
@@ -131,6 +144,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
             if frame is not None:
                 data = await client.download_file(frame.path)
                 self._source = "archived"
+                self._frame_path = frame.path
                 segments = frame.path.split("/")
                 store_id = (
                     segments[segments.index("captures") + 1] if "captures" in segments else ""

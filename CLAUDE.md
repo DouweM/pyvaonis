@@ -112,12 +112,15 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   that the `/files` HTTP server only renders the *live* capture (a GET of an archived frame hangs);
   `file_http_url` exists but is unused. FTP is slow (per-call connect+login + a PASV data connection
   over the bridge, ~seconds each; connection pooling didn't help — the data connection dominates). So
-  the media proxy view caches served bytes in **two levels** — in-session memory (LRU 64) + an
-  on-disk cache at `<config>/vaonis_media_cache/` (persists across restarts, pruned to ~1500 files) —
-  and **caps** concurrent fetches (`asyncio.Semaphore(4)`); the image entity fetches in the background
-  + caches. (The Singularity app's gallery is fast because it downloads each frame to the phone
-  *during* capture and shows local copies — there is NO telescope thumbnail endpoint; the disk cache
-  is our lazy equivalent.) MLSD returns no `modify`, so the real timestamp comes from an **MDTM**.
+  the shared **`MediaCache`** (`media_cache.py`: in-session memory LRU 64 + on-disk
+  `<config>/vaonis_media_cache/`, persists across restarts, pruned to ~1500 files) serves all frames,
+  and the proxy **caps** concurrent fetches (`asyncio.Semaphore(4)`). **Proactive capture download**
+  (mirrors the app, which keeps local phone copies): the image entity already downloads each live
+  frame during an observation, so it persists those bytes into the MediaCache under
+  `frame_key(entry_id, ftp_path)` — the exact key the browser/proxy use — for FREE (no extra fetch),
+  so that observation's gallery is instant. Old observations are still cached lazily on first view.
+  (Link is ~25 KB/s over the bridge — a 224 KB frame ≈ 9 s; HTTP `/files` and FTP are equal speed, so
+  we keep FTP. There is NO telescope thumbnail endpoint.) MLSD has no `modify` → timestamp via **MDTM**.
   **Latest target** sensor reads `coordinator.latest_target`, which the image entity sets from the
   live obs or the archived storeId (`observation_object_name`). The config entry is titled after the
   telescope's own `telescopeName` (e.g. "Stellina"), set in setup + config_flow. Observation/plan/init
