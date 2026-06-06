@@ -359,17 +359,25 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
   `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**.
 - Buttons: **initialize** (one-tap auto-init/align — the start of the flow), **observe** (start the
-  target picked in the select), take control, **release control**, park, stop, **restart autofocus**,
-  **enable multi-night**, shut down. Each is **disabled when it doesn't apply**, mirroring the app's
-  own gates (take control only when nobody holds it, release only when HA does, initialize/park only
-  when idle, observe only when idle + initialized + a target is chosen, stop/restart-autofocus/
-  enable-multi-night only while observing). HA identifies itself to the telescope as **"Home Assistant"** (shown in the
-  Singularity app's connected-devices list and the *Controlling device* sensor).
-- Switch: **Multi-Light (HDR)** (CovalENS).
+  target picked in the select), **resume** (continue the newest saved multi-night capture), take
+  control, **release control**, park, stop, **restart autofocus**, **enable multi-night**, shut down.
+  Each is **disabled when it doesn't apply**, mirroring the app's own gates (take control only when
+  nobody holds it, release only when HA does, initialize/park only when idle, observe only when idle +
+  initialized + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
+  restart-autofocus/enable-multi-night only while observing). HA identifies itself to the telescope as
+  **"Home Assistant"** (shown in the Singularity app's connected-devices list and *Controlling device*).
+- Switches: **Multi-Light (HDR)** (CovalENS, a device setting), and two local **Advanced-observation
+  toggles** the Observe button respects — **Mosaic mode** and **Multi-night mode**.
+- Numbers: **Mosaic width** / **Mosaic height** (degrees) — the field size used when Mosaic mode is on.
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting only
   *picks* the target (no slew) — press **Observe** to start it (browse-then-Observe, like the app).
   Available only when idle. `suggestions` attribute carries name/altitude/magnitude/constellation/
   description.
+
+So the whole **Advanced observation** flow is point-and-click from a dashboard: flip **Mosaic mode**
+(and set width/height), and/or **Multi-night mode**, pick a target, press **Observe** — then **Resume**
+later. (The `vaonis.observe`/`vaonis.resume` services remain for automations and picking a specific
+saved capture by `store_id`.)
 - Image: **Latest image** — a single `image` entity (telescope stacks are slow stills, not a video
   feed) that always shows the most recent frame: live while observing, otherwise the newest saved
   capture. Attributes: `source` (`live`/`archived`) and `target` (the object); the timestamp is the

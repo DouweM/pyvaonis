@@ -55,6 +55,7 @@
     "button": {
       "initialize": { "name": "Initialize" },
       "observe": { "name": "Observe" },
+      "resume": { "name": "Resume multi-night capture" },
       "take_control": { "name": "Take control" },
       "park": { "name": "Park" },
       "stop": { "name": "Stop observation" },
@@ -67,7 +68,13 @@
       "target": { "name": "Tonight's target" }
     },
     "switch": {
-      "multi_light": { "name": "Multi-Light (HDR)" }
+      "multi_light": { "name": "Multi-Light (HDR)" },
+      "mosaic": { "name": "Mosaic mode" },
+      "multi_night": { "name": "Multi-night mode" }
+    },
+    "number": {
+      "mosaic_width": { "name": "Mosaic width" },
+      "mosaic_height": { "name": "Mosaic height" }
     }
   }
 }

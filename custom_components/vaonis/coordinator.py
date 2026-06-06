@@ -60,6 +60,12 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         # The object shown in the Latest image (set by the image entity's background fetch); the
         # "Latest target" sensor reads this so it can be rendered alongside the image.
         self.latest_target: str | None = None
+        # UI-set Advanced-observation options the Observe button applies (switches/number entities
+        # write these; they persist via those entities' restored state).
+        self.mosaic_enabled: bool = False
+        self.mosaic_width: float = 1.6
+        self.mosaic_height: float = 1.1
+        self.multi_night_enabled: bool = False
 
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""

@@ -128,6 +128,7 @@ async def async_setup_entry(
     entities: list[ButtonEntity] = [VaonisButton(coordinator, d) for d in BUTTONS]
     entities.append(VaonisInitializeButton(coordinator))
     entities.append(VaonisObserveButton(coordinator))
+    entities.append(VaonisResumeButton(coordinator))
     async_add_entities(entities)
 
 
@@ -216,12 +217,21 @@ class VaonisObserveButton(VaonisEntity, ButtonEntity):
         super().__init__(coordinator, "observe")
 
     async def async_press(self) -> None:
-        """Take control and start observing the selected target."""
-        target = self.coordinator.selected_target
+        """Take control and start observing the selected target.
+
+        Applies the Mosaic / Multi-night toggles (and the mosaic width/height numbers) if they're on.
+        """
+        c = self.coordinator
+        target = c.selected_target
         if not target:
             raise HomeAssistantError("No target selected — pick one in 'Tonight's target' first")
+        mosaic = (c.mosaic_width, c.mosaic_height) if c.mosaic_enabled else None
         try:
-            await self.coordinator.run_action(lambda c: c.observe_object(target, replace=True))
+            await c.run_action(
+                lambda cl: cl.observe_object(
+                    target, replace=True, mosaic=mosaic, multi_night=c.multi_night_enabled
+                )
+            )
         except VaonisError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -235,4 +245,43 @@ class VaonisObserveButton(VaonisEntity, ButtonEntity):
             and not data.is_busy
             and bool(data.initialized)
             and bool(self.coordinator.selected_target)
+        )
+
+
+class VaonisResumeButton(VaonisEntity, ButtonEntity):
+    """Resume the most recent saved multi-night capture, continuing its stack.
+
+    Enabled when idle, initialized, and at least one capture is saved. For a specific one, use the
+    ``vaonis.resume`` service with a ``store_id`` (see the Multi-night captures sensor).
+    """
+
+    _attr_translation_key = "resume"
+    _attr_icon = "mdi:play-box-multiple"
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the resume button."""
+        super().__init__(coordinator, "resume")
+
+    async def async_press(self) -> None:
+        """Resume the newest saved capture (highest, date-prefixed storeId)."""
+        saved = self.coordinator.client.stored_captures()
+        if not saved:
+            raise HomeAssistantError("No saved multi-night captures to resume")
+        newest = max(saved, key=lambda c: c.get("storeId") or "")
+        store_id = newest.get("storeId")
+        try:
+            await self.coordinator.run_action(lambda c: c.resume_capture(store_id, replace=True))
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    @property
+    def available(self) -> bool:
+        """Enabled when idle, initialized, and there's a saved capture to resume."""
+        data = self.coordinator.data
+        return (
+            super().available
+            and bool(data)
+            and not data.is_busy
+            and bool(data.initialized)
+            and bool(self.coordinator.client.stored_captures())
         )

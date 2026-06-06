@@ -133,7 +133,11 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
   **Two-step observe**: the Tonight's-target select only *picks* (stores `coordinator.selected_target`,
   no slew); the **Observe** button starts it (browse-then-Observe like the app). **Initialize** button
-  = one-tap auto-init. Buttons/select gate their `available` on live state to mirror the app's exact
+  = one-tap auto-init. **Advanced observation is UI-native**: `switch.mosaic`/`switch.multi_night`
+  (local CONFIG toggles, RestoreEntity → `coordinator.mosaic_enabled`/`multi_night_enabled`) +
+  `number.mosaic_width`/`mosaic_height` (°, RestoreNumber → coordinator); the Observe button reads
+  these and passes `mosaic`/`multi_night` to `observe_object`. **Resume** button + `vaonis.resume`/
+  `delete_capture` services + "Multi-night captures" sensor (lists `storedCaptures`). Buttons/select gate their `available` on live state to mirror the app's exact
   enable conditions (take-control only when `masterDeviceId==null`, release only when we're master,
   park only idle+not-parked, observe only idle+initialized+target-chosen, stop/refocus/multi-night
   only while observing, enable-multi-night also needs ≥1 stacked frame and not-already-resumable).
