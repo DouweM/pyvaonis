@@ -376,11 +376,12 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   frame's real capture time (MDTM). Frames are fetched in the background and cached, so the entity
   never blocks.
 - Media source: **Vaonis** in the HA media browser — **one folder per observation** (labelled
-  *Object · date*, newest first), each containing its frames **with thumbnails**; a live frame appears
-  on top while observing. Bytes are streamed through HA via a proxy view that **caches** served frames
-  and **caps concurrent fetches** so a wall of thumbnails can't overwhelm the scope (the raw FTP
-  storeId/`images` nesting and `*.json` metadata are hidden). Frames come over FTP — the scope's
-  `/files` HTTP server only renders the *live* capture, not saved files.
+  *Object · date*, newest first) with a **cover thumbnail** (a representative frame, fetched lazily);
+  open a folder to see its frames (click one to view it). A live frame appears on top while observing.
+  Why covers rather than a thumbnail per frame: each frame is a slow FTP download (the scope's `/files`
+  HTTP server only renders the *live* capture), so per-frame thumbnails would mean dozens of downloads;
+  one cover per folder keeps browsing fast. The proxy view **caches** served frames and **caps
+  concurrent fetches**; the raw FTP storeId/`images` nesting and `*.json` metadata are hidden.
 - Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
   button's scriptable form — adds explicit `latitude`/`longitude` and `skip_autofocus`),
   **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**

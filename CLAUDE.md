@@ -101,9 +101,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Step 1: re-extract catalog keeping `distance/realSize/discoveredBy` + bundle `catalog_object/*.png`
   (lowercased id, rotate 90°) + `constellations.json`.
 - HA: media-source presents **one folder per observation** (label `<Object> · <date>` via
-  `_observation_label` parsing the storeId; newest first) → frames with thumbnails (proxy-view URL set
-  as `thumbnail`); live frame on top while observing; storeId/`images` nesting + `*.json` hidden.
-  `run_plan`/`stop_plan` now drive the native
+  `_observation_label`; newest first) with a lazy **cover thumbnail** (proxy `cover` kind → newest
+  frame of that obs via `client.observation_frames`); frames inside have NO thumbnail (each would be a
+  slow FTP download) — click to view. Live frame on top while observing; storeId/`images` + `*.json`
+  hidden. `run_plan`/`stop_plan` now drive the native
   Plan-My-Night (`client.start_plan`/`stop_plan`). Single **image** entity (`VaonisImage`, Platform.
   IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest capture via
   `client.latest_capture()`; `source` (live|archived) + `target` attrs; `image_last_updated` = the

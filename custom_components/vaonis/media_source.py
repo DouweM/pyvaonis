@@ -35,8 +35,7 @@ from .pyvaonis.const import FTP_ROOT
 
 _LOGGER = logging.getLogger(__name__)
 
-_IMAGE_EXT = (".jpg", ".jpeg", ".tif", ".tiff")
-_MAX_FRAMES = 300  # cap thumbnails per observation (newest first); logged if exceeded
+_MAX_FRAMES = 300  # cap frames listed per observation (newest first); logged if exceeded
 _STORE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-\d{2}")
 
 
@@ -47,10 +46,6 @@ async def async_get_media_source(hass: HomeAssistant) -> VaonisMediaSource:
 
 def _b64(text: str) -> str:
     return base64.urlsafe_b64encode(text.encode()).decode()
-
-
-def _is_image(name: str) -> bool:
-    return name.lower().endswith(_IMAGE_EXT)
 
 
 def _observation_label(store_id: str) -> str:
@@ -122,16 +117,22 @@ class VaonisMediaSource(MediaSource):
                 )
             caps = [e for e in await client.library(FTP_ROOT) if e.is_dir]
             for cap in sorted(caps, key=lambda e: e.name, reverse=True):  # storeId date-prefixed
+                # Each folder gets ONE cover thumbnail, fetched lazily when HA renders it (the `cover`
+                # proxy picks a representative frame) — so the tree is a single listing, not a slow
+                # download per frame. Frames themselves are shown without thumbnails (click to view).
                 children.append(
                     self._folder(
-                        f"{entry.entry_id}|obs|{_b64(cap.path)}", _observation_label(cap.name), []
+                        f"{entry.entry_id}|obs|{_b64(cap.path)}",
+                        _observation_label(cap.name),
+                        [],
+                        thumbnail=self._proxy(entry.entry_id, "cover", _b64(cap.path)),
                     )
                 )
             return self._folder(entry.entry_id, entry.title, children)
 
-        if parts[1] == "obs":  # one observation: its frames (newest first) with thumbnails
+        if parts[1] == "obs":  # one observation: its frames (newest first), click to view
             store_path = base64.urlsafe_b64decode(parts[2]).decode()
-            frames = await self._observation_frames(client, store_path)
+            frames = await client.observation_frames(store_path)
             if len(frames) > _MAX_FRAMES:
                 _LOGGER.debug(
                     "observation %s has %d frames; showing newest %d",
@@ -139,38 +140,23 @@ class VaonisMediaSource(MediaSource):
                     len(frames),
                     _MAX_FRAMES,
                 )
-            children = []
-            for fe in frames[:_MAX_FRAMES]:
-                # Bytes come over FTP — the scope's /files HTTP server only renders the *live*
-                # capture, not arbitrary archived files. Fetches are pooled + concurrency-capped.
-                ref = _b64(fe.path)
-                children.append(
-                    self._image(
-                        f"{entry.entry_id}|ftp|{ref}",
-                        fe.name,
-                        self._proxy(entry.entry_id, "ftp", ref),
-                    )
-                )
+            children = [
+                # No per-frame thumbnail (each would be a slow FTP download); click opens the frame,
+                # which the proxy fetches once and caches.
+                self._image(f"{entry.entry_id}|ftp|{_b64(fe.path)}", fe.name)
+                for fe in frames[:_MAX_FRAMES]
+            ]
             label = _observation_label(store_path.rstrip("/").split("/")[-1])
             return self._folder(item.identifier, label, children)
 
         raise Unresolvable(f"Cannot browse {item.identifier}")
 
-    async def _observation_frames(self, client, store_path: str) -> list:
-        """The image files of one observation, newest first.
-
-        Handles both layouts: frames directly in the storeId dir, and the usual ``images/`` subdir.
-        ``store.json``/``capture.json`` and other non-images are skipped.
-        """
-        entries = await client.library(store_path)
-        frames = [e for e in entries if not e.is_dir and _is_image(e.name)]
-        images_dir = next((e for e in entries if e.is_dir and e.name == "images"), None)
-        if images_dir is not None:
-            frames += [e for e in await client.library(images_dir.path) if _is_image(e.name)]
-        return sorted(frames, key=lambda e: e.name, reverse=True)
-
     def _folder(
-        self, identifier: str | None, title: str, children: list[BrowseMediaSource]
+        self,
+        identifier: str | None,
+        title: str,
+        children: list[BrowseMediaSource],
+        thumbnail: str | None = None,
     ) -> BrowseMediaSource:
         return BrowseMediaSource(
             domain=DOMAIN,
@@ -182,6 +168,7 @@ class VaonisMediaSource(MediaSource):
             can_expand=True,
             children=children,
             children_media_class=MediaClass.IMAGE,
+            thumbnail=thumbnail,
         )
 
     def _image(

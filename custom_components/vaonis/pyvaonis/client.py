@@ -759,6 +759,20 @@ class VaonisClient:
         entry = await self.latest_capture()
         return entry.path if entry else None
 
+    async def observation_frames(self, store_path: str) -> list[FtpEntry]:
+        """The image frames of one capture (``/system/captures/<storeId>``), newest first.
+
+        Handles both layouts — frames directly in the storeId dir, and the usual ``images/`` subdir —
+        and skips ``store.json``/``capture.json`` and other non-images.
+        """
+        exts = (".jpg", ".jpeg", ".tif", ".tiff")
+        entries = await self.library(store_path)
+        frames = [e for e in entries if not e.is_dir and e.name.lower().endswith(exts)]
+        images = next((e for e in entries if e.is_dir and e.name == "images"), None)
+        if images is not None:
+            frames += [e for e in await self.library(images.path) if e.name.lower().endswith(exts)]
+        return sorted(frames, key=lambda e: e.name, reverse=True)
+
     async def park(self) -> dict[str, Any]:
         """Return the arm to its parked position (refused mid-operation; stop first)."""
         self._require_idle("park")

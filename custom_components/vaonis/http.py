@@ -64,7 +64,7 @@ class VaonisMediaView(HomeAssistantView):
         entry = self.hass.config_entries.async_get_entry(entry_id)
         if entry is None or getattr(entry, "runtime_data", None) is None:
             return web.Response(status=404)
-        if kind not in ("http", "ftp"):
+        if kind not in ("http", "ftp", "cover"):
             return web.Response(status=404)
 
         cache_key = f"{entry_id}:{kind}:{ref}"
@@ -79,6 +79,13 @@ class VaonisMediaView(HomeAssistantView):
                 if kind == "http":
                     data = await client.fetch_image(decoded)
                     content_type = "image/jpeg"
+                elif kind == "cover":
+                    # A folder cover: the newest frame of one observation (decoded = its storeId dir).
+                    frames = await client.observation_frames(decoded)
+                    if not frames:
+                        return web.Response(status=404)
+                    data = await client.download_file(frames[0].path)
+                    content_type = _mime_for(frames[0].path)
                 else:
                     data = await client.download_file(decoded)
                     content_type = _mime_for(decoded)
