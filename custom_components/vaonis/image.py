@@ -108,9 +108,11 @@ class VaonisImage(VaonisEntity, ImageEntity):
                     # Proactively populate the gallery cache: we just downloaded this frame for
                     # display, so persisting it (free) makes it instant in the media browser later —
                     # especially each live frame during an observation, like the app does.
-                    if self._media_cache is not None and self._frame_path:
-                        entry_id = self.coordinator.config_entry.entry_id
-                        await self._media_cache.put(frame_key(entry_id, self._frame_path), data)
+                    entry = self.coordinator.config_entry
+                    if self._media_cache is not None and self._frame_path and entry:
+                        await self._media_cache.put(
+                            frame_key(entry.entry_id, self._frame_path), data
+                        )
                 if target_changed:  # refresh the Latest target sensor, which reads the coordinator
                     self.coordinator.async_update_listeners()
         finally:

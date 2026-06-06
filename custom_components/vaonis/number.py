@@ -9,13 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from homeassistant.components.number import NumberEntity
 from homeassistant.components.number import NumberEntityDescription
 from homeassistant.components.number import NumberMode
+from homeassistant.components.number import RestoreNumber
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
@@ -68,7 +67,7 @@ async def async_setup_entry(
     async_add_entities(VaonisNumber(coordinator, d) for d in NUMBERS)
 
 
-class VaonisNumber(VaonisEntity, NumberEntity, RestoreEntity):
+class VaonisNumber(VaonisEntity, RestoreNumber):
     """A mosaic field-size input (degrees), persisted across restarts."""
 
     entity_description: VaonisNumberDescription

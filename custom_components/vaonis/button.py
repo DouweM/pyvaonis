@@ -256,6 +256,8 @@ class VaonisResumeButton(VaonisEntity, ButtonEntity):
             raise HomeAssistantError("No saved multi-night captures to resume")
         newest = max(saved, key=lambda c: c.get("storeId") or "")
         store_id = newest.get("storeId")
+        if not store_id:
+            raise HomeAssistantError("Saved capture has no storeId")
         try:
             await self.coordinator.run_action(lambda c: c.resume_capture(store_id, replace=True))
         except VaonisError as err:

@@ -26,8 +26,9 @@ class VaonisEntity(CoordinatorEntity[VaonisCoordinator]):
     @property
     def _telescope_id(self) -> str:
         status = self.coordinator.data
+        entry = self.coordinator.config_entry
         return (status.telescope_id if status and status.telescope_id else None) or (
-            self.coordinator.config_entry.unique_id or "unknown"
+            (entry.unique_id if entry else None) or "unknown"
         )
 
     @property

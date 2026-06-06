@@ -1,10 +1,9 @@
 """Guard: every name the HA integration imports from ``pyvaonis`` must actually be exported.
 
-CI's pyright only type-checks the bundled ``pyvaonis`` library + tests (not the HA platform files,
-since ``homeassistant`` isn't installed), and nothing imports the platforms at test time — so a
-missing export (e.g. ``from .pyvaonis import visible_tonight``) only blows up at HA runtime. This
-statically parses the HA files and checks each ``.pyvaonis[...]`` import resolves against the real
-(installed) package.
+pyright type-checks the whole integration, but as belt-and-suspenders this also *imports* the real
+(installed) package and checks each ``from .pyvaonis[...] import name`` resolves at runtime — the
+exact failure mode (a missing export like ``visible_tonight``) that takes the integration down on
+load. Cheap, and independent of the type checker.
 """
 
 from __future__ import annotations

@@ -63,6 +63,8 @@ def _operation(coordinator: VaonisCoordinator) -> Any:
     op = coordinator.data.raw.get("currentOperation") if coordinator.data else None
     if isinstance(op, dict) and not op.get("stopped"):
         kind = op.get("type")
+        if kind is None:
+            return None
         return OPERATION_TYPE_LABELS.get(kind, kind)  # friendly label (else the raw enum)
     return None
 

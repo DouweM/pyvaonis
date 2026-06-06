@@ -298,6 +298,8 @@ def _register_services(hass: HomeAssistant) -> None:
                     else "no saved multi-night captures to resume"
                 )
             store_id = saved[0].get("storeId")
+        if not store_id:
+            raise HomeAssistantError("no store_id to resume")
         await coordinator.run_action(lambda c: c.resume_capture(store_id, replace=True))
 
     hass.services.async_register(

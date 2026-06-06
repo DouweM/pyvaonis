@@ -50,6 +50,8 @@ dev = [
     "ruff>=0.14",
     "typer>=0.15",
     "ephem>=4.1",
+    # So pyright can resolve `homeassistant` and type-check the whole integration (not just the lib).
+    "homeassistant>=2024.12",
 ]
 
 [tool.ruff]
@@ -72,7 +74,10 @@ pythonVersion = "3.13"
 typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
-include = ["custom_components/vaonis/pyvaonis", "tests"]
+include = ["custom_components/vaonis", "tests"]
+# Home Assistant exposes these via component packages that don't list __all__ (e.g.
+# `HomeAssistantView`, `MediaClass`) — the documented import paths trip this check, so silence it.
+reportPrivateImportUsage = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

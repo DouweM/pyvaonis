@@ -111,7 +111,7 @@ class VaonisSettingSelect(VaonisEntity, SelectEntity):
         """The setting's current value as a friendly label, or None if unknown."""
         settings = self._status_value("settings")
         value = settings.get(self._field) if isinstance(settings, dict) else None
-        return self._labels.get(value)
+        return self._labels.get(value) if value is not None else None
 
     async def async_select_option(self, option: str) -> None:
         """Set the setting (one-shot: take control, set, release)."""
@@ -153,7 +153,7 @@ class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):
         """The level from `settings.algoHdrBackground` as a friendly label, or None if unknown."""
         settings = self._status_value("settings")
         algo = settings.get("algoHdrBackground") if isinstance(settings, dict) else None
-        return _BALENS_LABELS.get(algo)
+        return _BALENS_LABELS.get(algo) if algo is not None else None
 
     async def async_select_option(self, option: str) -> None:
         """Set the BalENS level (one-shot: take control, set, release)."""
