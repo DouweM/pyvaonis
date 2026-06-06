@@ -260,7 +260,10 @@ class TonightObject(BaseModel):
     obj: CatalogObject
     peak_altitude: float
     peak_time: datetime  # UTC, when it peaks within the window
-    up_now: bool  # already above min_altitude at the window start / now
+    altitude_now: (
+        float  # altitude at the reference time (``when``) — how well placed it is right now
+    )
+    up_now: bool  # above min_altitude right now
 
 
 def visibility_rating(altitude: float) -> str:
@@ -396,9 +399,15 @@ def visible_tonight(
         except RuntimeError:  # ephem not installed; skip solar objects
             continue
         if peak >= min_altitude:
-            up_now = obj.altitude(latitude, longitude, start) >= min_altitude
+            alt_now = obj.altitude(latitude, longitude, when)
             results.append(
-                TonightObject(obj=obj, peak_altitude=peak, peak_time=peak_time, up_now=up_now)
+                TonightObject(
+                    obj=obj,
+                    peak_altitude=peak,
+                    peak_time=peak_time,
+                    altitude_now=alt_now,
+                    up_now=alt_now >= min_altitude,
+                )
             )
 
     results.sort(key=lambda v: (v.obj.grade or 0, v.peak_altitude), reverse=True)

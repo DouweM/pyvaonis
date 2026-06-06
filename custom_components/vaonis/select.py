@@ -24,6 +24,7 @@ from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
 from .pyvaonis import VaonisError
 from .pyvaonis import get_object
+from .pyvaonis import is_dark
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_tonight
 from .pyvaonis.const import model_supports
@@ -186,21 +187,31 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        # What's worth imaging *tonight* — peak altitude over tonight's dark window (not the live
-        # instant), so a target picked in daylight reflects the coming night. Curated (grade>=5)
-        # deep-sky + planets/Moon, best first. Recompute is throttled (it's stable through the night
-        # and would otherwise run on every status push); current_option is kept fresh by select.
+        # Membership is "what's worth imaging *tonight*" — the curated (grade>=5) deep-sky + planets/
+        # Moon whose peak altitude clears the bar over tonight's dark window, so a target picked in
+        # daylight reflects the coming night. That set is stable; the *order* is "best to shoot right
+        # now first" (see _now_rank). Recompute is throttled (~10 min) so it doesn't run on every
+        # status push and the order only drifts slowly; current_option is kept fresh by select.
         now = time.monotonic()
         if len(self._attr_options) > 1 and now - self._computed_at < _REFRESH_TTL:
             return
         self._computed_at = now
+        lat, lon = self._hass.config.latitude, self._hass.config.longitude
         visible = visible_tonight(
-            self._hass.config.latitude,
-            self._hass.config.longitude,
-            min_altitude=MIN_ALTITUDE,
-            min_grade=MIN_GRADE,
-            limit=MAX_OPTIONS,
+            lat, lon, min_altitude=MIN_ALTITUDE, min_grade=MIN_GRADE, limit=MAX_OPTIONS
         )
+        now_dark = is_dark(lat, lon)
+
+        def _now_rank(v: Any) -> tuple[bool, int, float, float]:
+            # Float well-placed-*now* targets to the top (only meaningful once it's dark), then fall
+            # back to curated grade + peak altitude — which also orders the not-up-yet targets that
+            # come into play later tonight. Current altitude is bucketed to 10° bands so the order
+            # shifts only when a target meaningfully rises/sets, not on every recompute.
+            placed_now = now_dark and v.up_now
+            band = round(v.altitude_now / 10) if placed_now else -1
+            return (placed_now, band, v.obj.grade or 0, v.peak_altitude)
+
+        visible.sort(key=_now_rank, reverse=True)
         self._target_by_label = {}
         self._suggestions = []
         for v in visible:
@@ -212,6 +223,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
                     "name": v.obj.display_name,
                     "peak_altitude": round(v.peak_altitude, 1),
                     "peak_time": v.peak_time.isoformat(),
+                    "altitude_now": round(v.altitude_now, 1),
                     "visibility": visibility_rating(v.peak_altitude),  # good/poor (app's colour)
                     "up_now": v.up_now,
                     "recommended_minutes": v.obj.duration or None,
