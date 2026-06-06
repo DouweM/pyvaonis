@@ -33,30 +33,35 @@ _REFRESH_TTL = (
 )
 
 
-def _target_label(obj: Any, peak: float | None = None, peak_time: str | None = None) -> str:
-    """Dropdown label: ``name · ↑peak° at time · type · mag · minutes``.
+def _target_label(obj: Any, peak_time: str | None = None) -> str:
+    """Dropdown label: ``name · for N min · at HH:MM · type · description``.
 
     We bake the key planning info into the option string because HA's select UI shows nothing but
-    that string. Tonight's *peak* altitude is used (not the live instantaneous altitude), so the label
-    is stable through the night and doesn't churn the option set; the full per-target breakdown still
-    lives in the ``suggestions`` attribute for a custom card.
+    that string. The peak time is when the target is highest over tonight's dark window (not the live
+    instant), so the label is stable through the night and doesn't churn the option set; the full
+    per-target breakdown (altitude, grade, magnitude, …) still lives in the ``suggestions`` attribute
+    for a custom card.
     """
     bits: list[str] = []
-    if peak is not None:
-        bits.append(f"↑{round(peak)}°" + (f" at {peak_time}" if peak_time else ""))
+    if obj.duration:
+        bits.append(f"for {obj.duration} min")
+    if peak_time:
+        bits.append(f"at {peak_time}")
     category = obj.category_label or obj.category
     if category and category.lower() not in obj.display_name.lower():
         bits.append(category)
-    if obj.magnitude is not None:
-        bits.append(f"mag {obj.magnitude:.1f}")
-    if obj.duration:
-        bits.append(f"{obj.duration} min")
+    if obj.description:
+        desc = " ".join(obj.description.split())
+        bits.append(desc if len(desc) <= 80 else desc[:79].rstrip() + "…")
     return f"{obj.display_name} · {' · '.join(bits)}" if bits else obj.display_name
 
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
 MAX_OPTIONS = 25
+_NONE_OPTION = (
+    "None"  # explicit "nothing chosen" entry at the top; not enough to start an observation
+)
 
 # BalENS level: friendly labels are the select options; mapped back to wire values on set
 # (set_balens_level normalises "First Edition" -> OLD, etc.).
@@ -173,8 +178,8 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         """Initialise the select and compute the first option set."""
         super().__init__(coordinator, "target")
         self._hass = hass
-        self._attr_current_option = None
-        self._attr_options = []
+        self._attr_current_option = _NONE_OPTION
+        self._attr_options = [_NONE_OPTION]
         self._target_by_label: dict[str, str] = {}  # rich option label -> catalog target name
         self._suggestions: list[dict[str, Any]] = []
         self._computed_at = 0.0  # monotonic time of the last (throttled) recompute
@@ -186,7 +191,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         # deep-sky + planets/Moon, best first. Recompute is throttled (it's stable through the night
         # and would otherwise run on every status push); current_option is kept fresh by select.
         now = time.monotonic()
-        if self._attr_options and now - self._computed_at < _REFRESH_TTL:
+        if len(self._attr_options) > 1 and now - self._computed_at < _REFRESH_TTL:
             return
         self._computed_at = now
         visible = visible_tonight(
@@ -200,7 +205,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._suggestions = []
         for v in visible:
             best = dt_util.as_local(v.peak_time).strftime("%H:%M")
-            label = _target_label(v.obj, peak=v.peak_altitude, peak_time=best)
+            label = _target_label(v.obj, peak_time=best)
             self._target_by_label[label] = v.obj.display_name
             self._suggestions.append(
                 {
@@ -219,12 +224,16 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
                     "description": v.obj.description,
                 }
             )
-        self._attr_options = list(self._target_by_label)
+        self._attr_options = [_NONE_OPTION, *self._target_by_label]
         # Keep the current pick selectable even if it isn't in tonight's list, so the chosen target
-        # (and the Observe button that reads it) stays valid. Match by target name.
+        # (and the Observe button that reads it) stays valid. Match by target name; nothing chosen
+        # shows the explicit "None" entry.
         chosen = self.coordinator.selected_target
+        if not chosen:
+            self._attr_current_option = _NONE_OPTION
+            return
         current = next((lbl for lbl, t in self._target_by_label.items() if t == chosen), None)
-        if chosen and current is None:
+        if current is None:
             obj = get_object(chosen)
             current = _target_label(obj) if obj else chosen
             self._target_by_label[current] = chosen
@@ -242,8 +251,14 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
-        """Choose the target (no telescope movement) — the Observe button starts it."""
-        self.coordinator.selected_target = self._target_by_label.get(option, option)
+        """Choose the target (no telescope movement) — the Observe button starts it.
+
+        Picking ``None`` clears the selection (Observe stays disabled).
+        """
+        if option == _NONE_OPTION:
+            self.coordinator.selected_target = None
+        else:
+            self.coordinator.selected_target = self._target_by_label.get(option, option)
         self._attr_current_option = option
         self.async_write_ha_state()
 

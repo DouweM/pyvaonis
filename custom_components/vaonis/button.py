@@ -210,7 +210,7 @@ class VaonisObserveButton(VaonisEntity, ButtonEntity):
         c = self.coordinator
         target = c.selected_target
         if not target:
-            raise HomeAssistantError("No target selected — pick one in 'Tonight's target' first")
+            raise HomeAssistantError("No target selected — pick one in 'Target' first")
         mosaic = (c.mosaic_width, c.mosaic_height) if c.mosaic_enabled else None
         try:
             await c.run_action(
