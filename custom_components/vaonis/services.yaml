@@ -69,17 +69,18 @@ observe:
 autoinit:
   name: Initialise / align
   description: >-
-    Take control and run auto-init (plate-solve + autofocus) at a location. Defaults to Home
-    Assistant's configured latitude/longitude. Telescope must be idle.
+    Take control and run auto-init (plate-solve + autofocus) at a location. Location defaults to the
+    telescope's own last-known position, falling back to Home Assistant's configured location.
+    Telescope must be idle.
   fields:
     latitude:
       name: Latitude
-      description: Defaults to Home Assistant's location.
+      description: Override the location. Defaults to the telescope's position, then HA's location.
       selector:
         number: { min: -90, max: 90, step: any, mode: box }
     longitude:
       name: Longitude
-      description: Defaults to Home Assistant's location.
+      description: Override the location. Defaults to the telescope's position, then HA's location.
       selector:
         number: { min: -180, max: 180, step: any, mode: box }
     skip_autofocus:

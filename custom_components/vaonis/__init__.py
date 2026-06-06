@@ -172,6 +172,21 @@ def _register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError("No Stellina telescope is set up")
         return entries[0].runtime_data
 
+    def _resolve_location(coordinator: VaonisCoordinator, call: ServiceCall) -> tuple[float, float]:
+        """Where the scope is: explicit service fields > the telescope's own position > HA's home.
+
+        The scope (no GPS) only reports a position once it's been initialised before, so HA's
+        configured home location is the fallback for a first init.
+        """
+        scope = coordinator.client.location()
+        lat = call.data.get("latitude")
+        lon = call.data.get("longitude")
+        if lat is None:
+            lat = scope[0] if scope else hass.config.latitude
+        if lon is None:
+            lon = scope[1] if scope else hass.config.longitude
+        return lat, lon
+
     async def run_plan(call: ServiceCall) -> ServiceResponse:
         """Start the telescope's native autonomous plan (gate weather in the automation)."""
         from datetime import UTC
@@ -181,7 +196,7 @@ def _register_services(hass: HomeAssistant) -> None:
         from .pyvaonis import observing_window
 
         coordinator = _first_coordinator()
-        lat, lon = hass.config.latitude, hass.config.longitude
+        lat, lon = _resolve_location(coordinator, call)
         items = [PlanItem.parse(t) for t in call.data["targets"]]
 
         start_time = None
@@ -228,10 +243,13 @@ def _register_services(hass: HomeAssistant) -> None:
     )
 
     async def autoinit(call: ServiceCall) -> None:
-        """Initialise/align the telescope (defaults to Home Assistant's configured location)."""
-        lat = call.data.get("latitude", hass.config.latitude)
-        lon = call.data.get("longitude", hass.config.longitude)
-        await _first_coordinator().run_action(
+        """Initialise/align the telescope.
+
+        Location defaults to the telescope's own last-known position, then HA's configured home.
+        """
+        coordinator = _first_coordinator()
+        lat, lon = _resolve_location(coordinator, call)
+        await coordinator.run_action(
             lambda c: c.start_autoinit(lat, lon, skip_auto_focus=call.data["skip_autofocus"])
         )
 
