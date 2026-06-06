@@ -100,7 +100,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Live view + controls + gallery from the scope. Data model in `PROTOCOL.md` → "Catalog & browsing".
   Step 1: re-extract catalog keeping `distance/realSize/discoveredBy` + bundle `catalog_object/*.png`
   (lowercased id, rotate 90°) + `constellations.json`.
-- HA: media-source over `/files`/FTP `/system/captures`; `run_plan`/`stop_plan` now drive the native
+- HA: media-source presents **one folder per observation** (label `<Object> · <date>` via
+  `_observation_label` parsing the storeId; newest first) → frames with thumbnails (proxy-view URL set
+  as `thumbnail`); live frame on top while observing; storeId/`images` nesting + `*.json` hidden.
+  `run_plan`/`stop_plan` now drive the native
   Plan-My-Night (`client.start_plan`/`stop_plan`). Single **image** entity (`VaonisImage`, Platform.
   IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest FTP capture
   via `client.latest_capture_path()`; `source` attr = live|archived; `image_last_updated` bumped when

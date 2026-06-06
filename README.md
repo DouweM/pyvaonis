@@ -373,8 +373,10 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 - Image: **Latest image** — a single `image` entity (telescope stacks are slow stills, not a video
   feed) that always shows the most recent frame: live while observing, otherwise the newest saved
   capture. Its `source` attribute says `live` or `archived`, and it carries a last-updated timestamp.
-- Media source: **Vaonis** in the HA media browser — *Recent captures* (newest run, live frame on top)
-  and *Saved library* (FTP `/system/captures`), streamed through HA via a proxy view.
+- Media source: **Vaonis** in the HA media browser — **one folder per observation** (labelled
+  *Object · date*, newest first), each containing its frames **with thumbnails**; a live frame appears
+  on top while observing. Bytes are streamed through HA via a proxy view (the raw FTP storeId/`images`
+  nesting and `*.json` metadata are hidden).
 - Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
   button's scriptable form — adds explicit `latitude`/`longitude` and `skip_autofocus`),
   **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**

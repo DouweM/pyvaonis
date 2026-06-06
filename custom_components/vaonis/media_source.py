@@ -1,13 +1,21 @@
-"""Media source: browse recent captures and the saved FTP library in the HA media browser.
+"""Media source: browse the telescope's observations in the HA media browser.
 
-Identifiers are pipe-delimited: ``<entry_id>``, ``<entry_id>|recent``, ``<entry_id>|lib|<b64 path>``
-for folders, and ``<entry_id>|http|<b64 url>`` / ``<entry_id>|ftp|<b64 path>`` for leaves.
-Leaves resolve to the proxy view in :mod:`.http`, which streams the bytes through Home Assistant.
+The telescope stores finished runs on its FTP server as
+``/system/captures/<storeId>/images/IMG_NNNN.jpg`` (``storeId`` = ``<date>_observation_<objectId>``),
+alongside ``images/`` nesting and ``store.json``/``capture.json`` metadata. Rather than expose that
+raw tree, we present one folder per observation — labelled by object + date, newest first — whose
+children are the frames (with thumbnails). A live frame appears on top while observing.
+
+Identifiers are pipe-delimited: ``<entry_id>`` and ``<entry_id>|obs|<b64 storeId-path>`` for folders;
+``<entry_id>|http|<b64 url>`` / ``<entry_id>|ftp|<b64 path>`` for leaves, which resolve to the proxy
+view in :mod:`.http` that streams the bytes through Home Assistant.
 """
 
 from __future__ import annotations
 
 import base64
+import logging
+import re
 
 from homeassistant.components.media_player import MediaClass
 from homeassistant.components.media_source import BrowseMediaSource
@@ -22,7 +30,14 @@ from .coordinator import VaonisConfigEntry
 from .http import _mime_for
 
 # FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
+from .pyvaonis import get_object
 from .pyvaonis.const import FTP_ROOT
+
+_LOGGER = logging.getLogger(__name__)
+
+_IMAGE_EXT = (".jpg", ".jpeg", ".tif", ".tiff")
+_MAX_FRAMES = 300  # cap thumbnails per observation (newest first); logged if exceeded
+_STORE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-\d{2}")
 
 
 async def async_get_media_source(hass: HomeAssistant) -> VaonisMediaSource:
@@ -34,6 +49,23 @@ def _b64(text: str) -> str:
     return base64.urlsafe_b64encode(text.encode()).decode()
 
 
+def _is_image(name: str) -> bool:
+    return name.lower().endswith(_IMAGE_EXT)
+
+
+def _observation_label(store_id: str) -> str:
+    """Turn a storeId into a friendly ``<Object> · <date> <time>`` label."""
+    dt_part, _, obj_part = store_id.partition("_observation_")
+    when = dt_part
+    if m := _STORE_RE.match(dt_part):
+        when = f"{m.group(1)} {m.group(2)}:{m.group(3)}"
+    if obj_part:
+        found = get_object(obj_part)  # cached catalog → friendly name (warmed at setup)
+        obj = found.display_name if found else obj_part.replace("_", " ")
+        return f"{obj} · {when}"
+    return when
+
+
 def _entries(hass: HomeAssistant) -> list[VaonisConfigEntry]:
     return [
         e
@@ -43,7 +75,7 @@ def _entries(hass: HomeAssistant) -> list[VaonisConfigEntry]:
 
 
 class VaonisMediaSource(MediaSource):
-    """Browse telescope captures: live/recent frames and the saved FTP archive."""
+    """Browse the telescope's observations (one folder each) and their frames."""
 
     name = "Vaonis"
 
@@ -52,18 +84,21 @@ class VaonisMediaSource(MediaSource):
         super().__init__(DOMAIN)
         self.hass = hass
 
+    def _proxy(self, entry_id: str, kind: str, ref: str) -> str:
+        """URL of the HA proxy view that streams a frame's bytes (used for leaves + thumbnails)."""
+        return f"/api/vaonis_media/{entry_id}/{kind}/{ref}"
+
     async def async_resolve_media(self, item: MediaSourceItem) -> PlayMedia:
         """Resolve a leaf identifier to the proxy-view URL."""
         parts = item.identifier.split("|")
         if len(parts) != 3 or parts[1] not in ("http", "ftp"):
             raise Unresolvable(f"Cannot resolve {item.identifier}")
         entry_id, kind, ref = parts
-        url = f"/api/vaonis_media/{entry_id}/{kind}/{ref}"
         mime = "image/jpeg" if kind == "http" else _mime_for(base64.urlsafe_b64decode(ref).decode())
-        return PlayMedia(url, mime)
+        return PlayMedia(self._proxy(entry_id, kind, ref), mime)
 
     async def async_browse_media(self, item: MediaSourceItem) -> BrowseMediaSource:
-        """Browse the tree (root -> telescope -> recent | library -> files)."""
+        """Browse the tree (root -> telescope -> observation -> frames)."""
         if not item.identifier:
             return self._folder(
                 None,
@@ -77,49 +112,61 @@ class VaonisMediaSource(MediaSource):
             raise Unresolvable(f"Unknown telescope: {parts[0]}")
         client = entry.runtime_data.client
 
-        if len(parts) == 1:  # telescope root: two folders
-            return self._folder(
-                entry.entry_id,
-                entry.title,
-                [
-                    self._folder(f"{entry.entry_id}|recent", "Recent captures", []),
-                    self._folder(f"{entry.entry_id}|lib|{_b64(FTP_ROOT)}", "Saved library", []),
-                ],
-            )
-
-        if parts[1] == "recent":
-            # The newest finished run's frames from the FTP gallery (so it's useful while idle),
-            # with the live frame on top when an observation is running. Newest frames first, capped.
-            children = []
+        if len(parts) == 1:  # telescope root: live frame (if any) + one folder per observation
+            children: list[BrowseMediaSource] = []
             if client.current_observation() is not None and (cur := client.current_image()):
+                ref = _b64(cur.static_url(client.ip))
                 children.append(
-                    self._image(f"{entry.entry_id}|http|{_b64(cur.static_url(client.ip))}", "live")
+                    self._image(
+                        f"{entry.entry_id}|http|{ref}",
+                        "● Live",
+                        self._proxy(entry.entry_id, "http", ref),
+                    )
                 )
             caps = [e for e in await client.library(FTP_ROOT) if e.is_dir]
-            if caps:
-                newest = max(caps, key=lambda e: e.name)  # storeId is date-prefixed
-                frames = [
-                    e
-                    for e in await client.library(f"{newest.path}/images")
-                    if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
-                ]
-                for fe in sorted(frames, key=lambda e: e.name, reverse=True)[:60]:
-                    children.append(self._image(f"{entry.entry_id}|ftp|{_b64(fe.path)}", fe.name))
-            return self._folder(item.identifier, "Recent captures", children)
-
-        if parts[1] == "lib":
-            path = base64.urlsafe_b64decode(parts[2]).decode()
-            children: list[BrowseMediaSource] = []
-            for fe in await client.library(path):
-                if fe.is_dir:
-                    children.append(
-                        self._folder(f"{entry.entry_id}|lib|{_b64(fe.path)}", fe.name, [])
+            for cap in sorted(caps, key=lambda e: e.name, reverse=True):  # storeId date-prefixed
+                children.append(
+                    self._folder(
+                        f"{entry.entry_id}|obs|{_b64(cap.path)}", _observation_label(cap.name), []
                     )
-                else:
-                    children.append(self._image(f"{entry.entry_id}|ftp|{_b64(fe.path)}", fe.name))
-            return self._folder(item.identifier, path, children)
+                )
+            return self._folder(entry.entry_id, entry.title, children)
+
+        if parts[1] == "obs":  # one observation: its frames (newest first) with thumbnails
+            store_path = base64.urlsafe_b64decode(parts[2]).decode()
+            frames = await self._observation_frames(client, store_path)
+            if len(frames) > _MAX_FRAMES:
+                _LOGGER.debug(
+                    "observation %s has %d frames; showing newest %d",
+                    store_path,
+                    len(frames),
+                    _MAX_FRAMES,
+                )
+            children = [
+                self._image(
+                    f"{entry.entry_id}|ftp|{_b64(fe.path)}",
+                    fe.name,
+                    self._proxy(entry.entry_id, "ftp", _b64(fe.path)),
+                )
+                for fe in frames[:_MAX_FRAMES]
+            ]
+            label = _observation_label(store_path.rstrip("/").split("/")[-1])
+            return self._folder(item.identifier, label, children)
 
         raise Unresolvable(f"Cannot browse {item.identifier}")
+
+    async def _observation_frames(self, client, store_path: str) -> list:
+        """The image files of one observation, newest first.
+
+        Handles both layouts: frames directly in the storeId dir, and the usual ``images/`` subdir.
+        ``store.json``/``capture.json`` and other non-images are skipped.
+        """
+        entries = await client.library(store_path)
+        frames = [e for e in entries if not e.is_dir and _is_image(e.name)]
+        images_dir = next((e for e in entries if e.is_dir and e.name == "images"), None)
+        if images_dir is not None:
+            frames += [e for e in await client.library(images_dir.path) if _is_image(e.name)]
+        return sorted(frames, key=lambda e: e.name, reverse=True)
 
     def _folder(
         self, identifier: str | None, title: str, children: list[BrowseMediaSource]
@@ -136,7 +183,9 @@ class VaonisMediaSource(MediaSource):
             children_media_class=MediaClass.IMAGE,
         )
 
-    def _image(self, identifier: str, title: str) -> BrowseMediaSource:
+    def _image(
+        self, identifier: str, title: str, thumbnail: str | None = None
+    ) -> BrowseMediaSource:
         return BrowseMediaSource(
             domain=DOMAIN,
             identifier=identifier,
@@ -145,4 +194,5 @@ class VaonisMediaSource(MediaSource):
             title=title,
             can_play=True,
             can_expand=False,
+            thumbnail=thumbnail,
         )
