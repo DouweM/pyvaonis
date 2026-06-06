@@ -3,6 +3,10 @@
 A single image entity (telescope stacks are slow stills, not a video feed): it shows the live frame
 while observing, otherwise the newest saved capture over FTP. The ``source`` attribute (and the Status
 sensor) says whether you're looking at a live or an archived frame.
+
+The frame is fetched in the background and cached, so ``async_image`` returns instantly — fetching
+inline would risk exceeding Home Assistant's 10 s image-proxy timeout (the idle path lists the FTP
+capture library and downloads a JPEG over the Wi-Fi bridge, which can be slow).
 """
 
 from __future__ import annotations
@@ -42,7 +46,10 @@ class VaonisImage(VaonisEntity, ImageEntity):
         VaonisEntity.__init__(self, coordinator, "image")
         ImageEntity.__init__(self, hass)
         self._signature: tuple[bool, int | None] | None = None
+        self._cached: bytes | None = None
         self._source: str | None = None
+        self._refreshing = False
+        self._stale = False
 
     def _signature_now(self) -> tuple[bool, int | None]:
         """A cheap key (from status, no FTP) that changes whenever the shown image should refresh."""
@@ -55,21 +62,42 @@ class VaonisImage(VaonisEntity, ImageEntity):
         )  # idle — the transition itself triggers one refresh to the newest capture
 
     async def async_added_to_hass(self) -> None:
-        """Seed the signature + timestamp so a frame is fetched immediately, not only on next push."""
+        """Kick off the first fetch so a frame is loaded without waiting for the next status push."""
         await super().async_added_to_hass()
         self._signature = self._signature_now()
-        self._attr_image_last_updated = dt_util.utcnow()
+        self._request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         signature = self._signature_now()
         if signature != self._signature:
             self._signature = signature
-            self._attr_image_last_updated = dt_util.utcnow()  # tells the frontend to refetch
+            self._request_refresh()
         super()._handle_coordinator_update()
 
-    async def async_image(self) -> bytes | None:
-        """Return the live frame if observing, otherwise the newest finished capture over FTP."""
+    def _request_refresh(self) -> None:
+        """Fetch the current frame in the background (coalescing concurrent requests)."""
+        if self._refreshing:
+            self._stale = True
+            return
+        self.hass.async_create_task(self._refresh())
+
+    async def _refresh(self) -> None:
+        self._refreshing = True
+        try:
+            data = await self._fetch()
+            if data is not None and data != self._cached:
+                self._cached = data
+                self._attr_image_last_updated = dt_util.utcnow()  # tells the frontend to refetch
+                self.async_write_ha_state()
+        finally:
+            self._refreshing = False
+        if self._stale:  # a change landed while we were fetching — go again
+            self._stale = False
+            self._request_refresh()
+
+    async def _fetch(self) -> bytes | None:
+        """Download the live frame if observing, otherwise the newest finished capture over FTP."""
         client = self.coordinator.client
         img = client.current_image()
         if img is not None:
@@ -89,8 +117,11 @@ class VaonisImage(VaonisEntity, ImageEntity):
                 return data
         except Exception:
             _LOGGER.debug("no saved Vaonis capture to show", exc_info=True)
-        self._source = None
         return None
+
+    async def async_image(self) -> bytes | None:
+        """Return the cached frame (fetched in the background by :meth:`_refresh`)."""
+        return self._cached
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
