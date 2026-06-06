@@ -53,6 +53,7 @@
     },
     "button": {
       "initialize": { "name": "Initialize" },
+      "observe": { "name": "Observe" },
       "take_control": { "name": "Take control" },
       "park": { "name": "Park" },
       "stop": { "name": "Stop observation" },

@@ -1,8 +1,9 @@
 """Select platform: pick a target to observe from the bundled catalog.
 
 The options are the catalog objects currently above the horizon for Home Assistant's
-configured location, best (highest-graded) first. Selecting one takes control and starts
-an observation with that object's recommended settings.
+configured location, best (highest-graded) first. Selecting one only *chooses* the target
+(no telescope movement) — pressing the **Observe** button then starts it, mirroring the
+app's browse-then-Observe flow.
 """
 
 from __future__ import annotations
@@ -12,13 +13,11 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
-from .pyvaonis import VaonisError
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_now
 
@@ -62,6 +61,12 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
             require_dark=True,
         )
         self._attr_options = [v.obj.display_name for v in visible]
+        # Keep the current pick selectable even if it briefly drops below the altitude cut-off, so
+        # the chosen target (and the Observe button that reads it) stays valid.
+        chosen = self.coordinator.selected_target
+        if chosen and chosen not in self._attr_options:
+            self._attr_options.append(chosen)
+        self._attr_current_option = chosen
         self._suggestions = [
             {
                 "name": v.obj.display_name,
@@ -92,10 +97,15 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
-        """Take control, start observing the chosen object, then release (one-shot)."""
-        try:
-            await self.coordinator.run_action(lambda c: c.observe_object(option, replace=True))
-        except VaonisError as err:
-            raise HomeAssistantError(str(err)) from err
+        """Choose the target (no telescope movement) — the Observe button starts it."""
+        self.coordinator.selected_target = option
         self._attr_current_option = option
         self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Available when idle with targets to offer (you pick the next observation)."""
+        if not super().available:
+            return False
+        idle = bool(self.coordinator.data) and not self.coordinator.data.is_busy
+        return idle and bool(self._attr_options)

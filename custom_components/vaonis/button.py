@@ -127,6 +127,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[ButtonEntity] = [VaonisButton(coordinator, d) for d in BUTTONS]
     entities.append(VaonisInitializeButton(coordinator))
+    entities.append(VaonisObserveButton(coordinator))
     async_add_entities(entities)
 
 
@@ -196,4 +197,42 @@ class VaonisInitializeButton(VaonisEntity, ButtonEntity):
         """Available only when idle (no operation running)."""
         return (
             super().available and bool(self.coordinator.data) and not self.coordinator.data.is_busy
+        )
+
+
+class VaonisObserveButton(VaonisEntity, ButtonEntity):
+    """Start observing the target chosen in the "Tonight's target" select.
+
+    The select only picks the target (no movement); this button starts it — the app's
+    browse-then-Observe flow. Available only when idle, initialized, and a target is chosen
+    (the app's ``canStartObservation``).
+    """
+
+    _attr_translation_key = "observe"
+    _attr_icon = "mdi:play"
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the button."""
+        super().__init__(coordinator, "observe")
+
+    async def async_press(self) -> None:
+        """Take control and start observing the selected target."""
+        target = self.coordinator.selected_target
+        if not target:
+            raise HomeAssistantError("No target selected — pick one in 'Tonight's target' first")
+        try:
+            await self.coordinator.run_action(lambda c: c.observe_object(target, replace=True))
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    @property
+    def available(self) -> bool:
+        """Enabled when idle, initialized, and a target has been chosen."""
+        data = self.coordinator.data
+        return (
+            super().available
+            and bool(data)
+            and not data.is_busy
+            and bool(data.initialized)
+            and bool(self.coordinator.selected_target)
         )

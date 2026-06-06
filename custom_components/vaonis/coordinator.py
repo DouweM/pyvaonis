@@ -49,6 +49,8 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         )
         self.client.on_status(self._handle_status)
         self.plan_task: asyncio.Task[None] | None = None
+        # The target chosen in the select but not yet started; the Observe button reads this.
+        self.selected_target: str | None = None
 
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""

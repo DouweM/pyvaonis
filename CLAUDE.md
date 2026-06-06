@@ -107,6 +107,14 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle. `autoinit`/`run_plan`
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
+  **Two-step observe**: the Tonight's-target select only *picks* (stores `coordinator.selected_target`,
+  no slew); the **Observe** button starts it (browse-then-Observe like the app). **Initialize** button
+  = one-tap auto-init. Buttons/select gate their `available` on live state to mirror the app's exact
+  enable conditions (take-control only when `masterDeviceId==null`, release only when we're master,
+  park only idle+not-parked, observe only idle+initialized+target-chosen, stop/refocus/multi-night
+  only while observing, enable-multi-night also needs ≥1 stacked frame and not-already-resumable).
+  EntityCategory: observing activity/telemetry primary, device housekeeping diagnostic (rule in
+  sensor.py). Controlling-device sensor shows "Nobody" when `masterDeviceId` is null.
 - Next API surfaces (bodies mapped): captureStore resume, playlist, sun/eclipse, expert raw, mosaic.
 
 ## Control / observation ordering (mirrors the app — verified in decompiled source)
