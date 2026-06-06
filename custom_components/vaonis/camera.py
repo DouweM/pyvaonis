@@ -30,6 +30,7 @@ class VaonisLiveCamera(VaonisEntity, Camera):
     """The current live-stacked frame as a camera snapshot (only while observing)."""
 
     _attr_translation_key = "live"
+    _attr_icon = "mdi:image-filter-center-focus"
 
     def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the camera entity."""
@@ -71,6 +72,7 @@ class VaonisLatestCamera(VaonisEntity, Camera):
     """
 
     _attr_translation_key = "latest"
+    _attr_icon = "mdi:image-multiple"
 
     def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the camera entity."""

@@ -34,18 +34,21 @@ BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
     VaonisBinaryDescription(
         key="initialized",
         translation_key="initialized",
+        icon="mdi:crosshairs-gps",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.data.initialized if c.data else None,
     ),
     VaonisBinaryDescription(
         key="has_control",
         translation_key="has_control",
+        icon="mdi:remote",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.client.has_control,
     ),
     VaonisBinaryDescription(
         key="tracking",
         translation_key="tracking",
+        icon="mdi:radar",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: any(
             (m or {}).get("state") == "TRACKING"
@@ -55,6 +58,7 @@ BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
     VaonisBinaryDescription(
         key="defog",
         translation_key="defog",
+        icon="mdi:weather-fog",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: (
             (c.data.raw.get("sensors") or {}).get("defogStatus", "OFF") != "OFF" if c.data else None
@@ -115,6 +119,7 @@ class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
     """Whether it's dark enough to observe (Sun below -10deg), matching the app."""
 
     _attr_translation_key = "dark"
+    _attr_icon = "mdi:weather-night"
 
     def __init__(self, coordinator: VaonisCoordinator, hass: HomeAssistant) -> None:
         """Initialise the darkness sensor."""

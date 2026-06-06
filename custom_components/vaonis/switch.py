@@ -26,6 +26,7 @@ class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
     """Multi-Light (HDR background / CovalENS) — a persistent device setting."""
 
     _attr_translation_key = "multi_light"
+    _attr_icon = "mdi:hdr"
 
     def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the switch."""

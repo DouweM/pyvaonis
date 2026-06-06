@@ -359,7 +359,10 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
   `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**.
 - Buttons: take control, **release control**, park, stop, **restart autofocus**, **enable
-  multi-night**, shut down.
+  multi-night**, shut down. Each is **disabled when it doesn't apply** (release control only when HA
+  holds control, take control only when it doesn't, stop/restart-autofocus/enable-multi-night only
+  while observing). HA identifies itself to the telescope as **"Home Assistant"** (shown in the
+  Singularity app's connected-devices list and the *Controlling device* sensor).
 - Switch: **Multi-Light (HDR)** (CovalENS).
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting starts
   the observation. `suggestions` attribute carries name/altitude/magnitude/constellation/description.

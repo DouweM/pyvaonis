@@ -40,6 +40,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
     """Choose tonight's observation target."""
 
     _attr_translation_key = "target"
+    _attr_icon = "mdi:star-shooting"
 
     def __init__(self, coordinator: VaonisCoordinator, hass: HomeAssistant) -> None:
         """Initialise the select and compute the first option set."""

@@ -13,8 +13,8 @@ from typing import Any
 
 # StellinaAutoInitStepType -> label (initialization_steps_*). TRY_POSITION is an outer container.
 AUTOINIT_STEP_LABELS: dict[str, str] = {
-    "PREPARE_MC_BOARD": "Starting",
-    "SEEK_STOP": "Starting",
+    "PREPARE_MC_BOARD": "Start",
+    "SEEK_STOP": "Start",
     "OPEN_ARM": "Star zone search",
     "MOVING": "Star zone search",
     "ASTROMETRY": "Star pattern analysis",
@@ -47,7 +47,7 @@ OBS_STEP_LABELS: dict[str, str] = {
     "START_TRACKING": "Tracking activation",
     "ASTROMETRY": "Checking position accuracy",
     "AUTO_FOCUS": "Autofocus",
-    "CAPTURE": "Capturing",
+    "CAPTURE": "Capture starting",
     "SEEK_STOP_ALT": "Resetting arm position",
     "POINTING_SUN": "Looking for the Sun",
     "CENTERING": "Centering the Sun",

@@ -26,45 +26,94 @@ class VaonisButtonDescription(ButtonEntityDescription):
     press_fn: Callable[[VaonisClient], Awaitable[object]]
     # Most actions need control; take it on demand first. False for the control buttons themselves.
     takes_control: bool = True
+    # When set, the button is disabled (greyed out) unless this returns True for the current state.
+    available_fn: Callable[[VaonisCoordinator], bool] | None = None
+
+
+def _observing(c: VaonisCoordinator) -> bool:
+    """An observation is running (mirrors the app's ``operationRunning``)."""
+    return c.client.current_observation() is not None
+
+
+def _idle(c: VaonisCoordinator) -> bool:
+    """No operation of any kind is running (the app's ``currentOperation == null``)."""
+    return bool(c.data) and not c.data.is_busy
+
+
+def _nobody_in_control(c: VaonisCoordinator) -> bool:
+    """No device currently holds master (the app's ``masterDeviceId == null``)."""
+    return bool(c.data) and not c.data.master_device_id
+
+
+def _is_parked(c: VaonisCoordinator) -> bool:
+    """Whether the arm is parked/closed (the app's ``isParked`` over the ALT motor)."""
+    motors = (c.data.raw.get("motors") if c.data else None) or {}
+    alt = motors.get("ALT") or {}
+    return bool(alt.get("atStop")) or alt.get("calibrated") is False
+
+
+def _can_resume(c: VaonisCoordinator) -> bool:
+    """The app's ``canBeResumable``: observing, has ≥1 stacked frame, not already resumable."""
+    obs = c.client.current_observation()
+    if obs is None or not obs.stacking_count:
+        return False
+    op = (c.data.raw.get("currentOperation") if c.data else {}) or {}
+    return (op.get("store") or {}).get("state", "NON_RESUMABLE") == "NON_RESUMABLE"
 
 
 BUTTONS: tuple[VaonisButtonDescription, ...] = (
     VaonisButtonDescription(
         key="take_control",
         translation_key="take_control",
+        icon="mdi:remote",
         press_fn=lambda client: client.take_control(),
         takes_control=False,
+        # App gate: take control only when nobody holds it (can't steal a master device).
+        available_fn=_nobody_in_control,
     ),
     VaonisButtonDescription(
         key="park",
         translation_key="park",
+        icon="mdi:home-import-outline",
         press_fn=lambda client: client.park(),
+        # App gate: park only when idle and not already parked.
+        available_fn=lambda c: _idle(c) and not _is_parked(c),
     ),
     VaonisButtonDescription(
         key="stop",
         translation_key="stop",
+        icon="mdi:stop",
         press_fn=lambda client: client.stop_observation(),
+        # App's Stop covers observations; a native plan is cancelled via the stop_plan service.
+        available_fn=_observing,
     ),
     VaonisButtonDescription(
         key="shutdown",
         translation_key="shutdown",
+        icon="mdi:power",
         press_fn=lambda client: client.request_shutdown(),
     ),
     VaonisButtonDescription(
         key="release_control",
         translation_key="release_control",
+        icon="mdi:remote-off",
         press_fn=lambda client: client.release_control(),
         takes_control=False,
+        available_fn=lambda c: c.client.has_control,
     ),
     VaonisButtonDescription(
         key="restart_autofocus",
         translation_key="restart_autofocus",
+        icon="mdi:image-filter-center-focus",
         press_fn=lambda client: client.restart_autofocus(),
+        available_fn=_observing,
     ),
     VaonisButtonDescription(
         key="enable_multi_night",
         translation_key="enable_multi_night",
+        icon="mdi:weather-night",
         press_fn=lambda client: client.enable_multi_night(),
+        available_fn=_can_resume,
     ),
 )
 
@@ -105,3 +154,11 @@ class VaonisButton(VaonisEntity, ButtonEntity):
                 await press_fn(self.coordinator.client)
         except VaonisError as err:
             raise HomeAssistantError(str(err)) from err
+
+    @property
+    def available(self) -> bool:
+        """Greyed out when the command doesn't apply (e.g. release control without control)."""
+        if not super().available:
+            return False
+        available_fn = self.entity_description.available_fn
+        return available_fn is None or available_fn(self.coordinator)

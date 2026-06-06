@@ -155,21 +155,30 @@ def _init_step(coordinator: VaonisCoordinator) -> Any:
 def _controlling_device(coordinator: VaonisCoordinator) -> Any:
     raw = coordinator.data.raw if coordinator.data else {}
     master = raw.get("masterDeviceId")
+    if not master:
+        return "Nobody"  # explicit rather than a misleading "Unknown" when no one holds control
     for dev in raw.get("connectedDevices") or []:
         if dev.get("id") == master:
             return dev.get("name") or master
     return master
 
 
+# EntityCategory convention (keep consistent): the scope's *observing activity & results* are primary
+# (no category) — Status, current operation/target/step, the capture telemetry (stacked/total frames,
+# integration time, frames acquired, gain, exposure), and plan state/target. Everything that's device
+# housekeeping — environment (temperature/humidity/dew point), storage, Wi-Fi band, hardware filter,
+# focuser temperature, who's in control, and the init-progress detail — is DIAGNOSTIC.
 SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="status",
         translation_key="status",
+        icon="mdi:telescope",
         value_fn=_status_summary,
     ),
     VaonisSensorDescription(
         key="init_step",
         translation_key="init_step",
+        icon="mdi:crosshairs-gps",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_init_step,
         available_fn=_initializing,
@@ -202,24 +211,28 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="operation",
         translation_key="operation",
+        icon="mdi:cog",
         value_fn=_operation,
         available_fn=lambda c: _operation(c) is not None,
     ),
     VaonisSensorDescription(
         key="target",
         translation_key="target",
+        icon="mdi:target",
         value_fn=_target,
         available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="step",
         translation_key="step",
+        icon="mdi:progress-clock",
         value_fn=_step,
         available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="stacking_count",
         translation_key="stacking_count",
+        icon="mdi:layers",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_stacking,
         available_fn=_observing,
@@ -227,6 +240,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="integration",
         translation_key="integration",
+        icon="mdi:camera-timer",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -236,6 +250,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="total_stacking",
         translation_key="total_stacking",
+        icon="mdi:layers-triple",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_total_stacking,
         available_fn=_observing,
@@ -252,12 +267,14 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="band",
         translation_key="band",
+        icon="mdi:wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_raw("network", "band"),
     ),
     VaonisSensorDescription(
         key="filter",
         translation_key="filter",
+        icon="mdi:filter",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_raw("filter"),
     ),
@@ -273,12 +290,14 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="controlling_device",
         translation_key="controlling_device",
+        icon="mdi:remote",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_controlling_device,
     ),
     VaonisSensorDescription(
         key="frames_acquired",
         translation_key="frames_acquired",
+        icon="mdi:camera-burst",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_frames_acquired,
         available_fn=_observing,
@@ -286,29 +305,31 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="gain",
         translation_key="gain",
+        icon="mdi:signal",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_gain,
         available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="exposure",
         translation_key="exposure",
+        icon="mdi:camera-iris",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_exposure_seconds,
         available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="plan_state",
         translation_key="plan_state",
+        icon="mdi:playlist-star",
         value_fn=_plan_state,
         available_fn=_planning,
     ),
     VaonisSensorDescription(
         key="plan_target",
         translation_key="plan_target",
+        icon="mdi:star-outline",
         value_fn=_plan_target,
         available_fn=_planning,
     ),

@@ -41,6 +41,11 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         self.client = VaonisClient(
             ip=entry.data[CONF_HOST],
             session=async_get_clientsession(hass),
+            # Identify as "Home Assistant" (shown in the app + the Controlling device sensor) with a
+            # device_id stable across restarts — otherwise the default MAC/random id changes each run
+            # and the scope's connectedDevices list piles up duplicate entries.
+            device_id=f"home-assistant-{entry.entry_id}",
+            name="Home Assistant",
         )
         self.client.on_status(self._handle_status)
         self.plan_task: asyncio.Task[None] | None = None
