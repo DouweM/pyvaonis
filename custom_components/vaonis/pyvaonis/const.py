@@ -49,6 +49,19 @@ def http_url(ip: str, path: str, port: int = HTTP_PORT, root: str = HTTP_ROOT) -
     return f"http://{ip}:{port}{root}{path}"
 
 
+def file_http_url(ip: str, ftp_path: str, port: int = HTTP_PORT) -> str:
+    """HTTP URL (no auth) of a saved file given its FTP path.
+
+    The HTTP image server exposes the same files as FTP but rooted at ``/files`` instead of
+    ``/system`` — and is far lighter than FTP (no per-request connect/login/PASV), so prefer it for
+    fetching image *bytes* (FTP is still needed to *list* directories).
+    """
+    path = ftp_path
+    if path.startswith("/system/"):
+        path = "/files/" + path[len("/system/") :]
+    return f"http://{ip}:{port}{path}"
+
+
 FTP_PORT: Final = 21
 # Anonymous FTP. On firmware 2.35.7 the captures live under /system/captures (/system also has
 # bias, dark, history, logs, plan, reports, temp); /user was empty. HTTP serves the same images

@@ -296,6 +296,19 @@ def get_object(object_id: str) -> CatalogObject | None:
     return None
 
 
+def observation_object_name(store_id: str) -> str | None:
+    """Friendly object name from a capture ``storeId`` (``<date>_observation_<objectId>``).
+
+    Resolves the objectId against the catalog (so ``moon`` -> "Moon", ``M104`` -> "Sombrero
+    Galaxy"); falls back to the raw id, or None when the storeId has no object part.
+    """
+    _, _, obj_part = store_id.partition("_observation_")
+    if not obj_part:
+        return None
+    found = get_object(obj_part)
+    return found.display_name if found else obj_part.replace("_", " ").title()
+
+
 def visible_now(
     latitude: float,
     longitude: float,

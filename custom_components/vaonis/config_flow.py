@@ -45,7 +45,8 @@ class VaonisConfigFlow(ConfigFlow, domain=DOMAIN):
                 unique_id = status.telescope_id or host
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title=DEFAULT_NAME, data={CONF_HOST: host})
+                name = (status.raw.get("settings") or {}).get("telescopeName") or DEFAULT_NAME
+                return self.async_create_entry(title=name, data={CONF_HOST: host})
             finally:
                 await client.disconnect()
 

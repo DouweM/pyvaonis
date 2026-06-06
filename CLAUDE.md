@@ -105,9 +105,14 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   as `thumbnail`); live frame on top while observing; storeId/`images` nesting + `*.json` hidden.
   `run_plan`/`stop_plan` now drive the native
   Plan-My-Night (`client.start_plan`/`stop_plan`). Single **image** entity (`VaonisImage`, Platform.
-  IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest FTP capture
-  via `client.latest_capture_path()`; `source` attr = live|archived; `image_last_updated` bumped when
-  the (observing, stacking_count) signature changes. Observation/plan/init
+  IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest capture via
+  `client.latest_capture()`; `source` (live|archived) + `target` attrs; `image_last_updated` = the
+  frame's real time (live=now, archived=MDTM). **Image bytes are fetched over HTTP** (`file_http_url`,
+  the `/files` static server — light/fast), NOT FTP; FTP is used only to *list*. The media proxy view
+  caps concurrent fetches (`asyncio.Semaphore(4)`) so a wall of thumbnails can't overwhelm the scope.
+  **Latest target** sensor reads `coordinator.latest_target`, which the image entity sets from the
+  live obs or the archived storeId (`observation_object_name`). The config entry is titled after the
+  telescope's own `telescopeName` (e.g. "Stellina"), set in setup + config_flow. Observation/plan/init
   sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle. `autoinit`/`run_plan`
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).

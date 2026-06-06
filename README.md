@@ -352,8 +352,8 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   (30m)", "Initialization: Star pattern analysis (50%)", "tonight — Observation in progress (M51,
   2/5)"), plus **initialization step**, current operation / **target** / **step**, **stacked
   frames** + **total** + **frames acquired** (so you can see the accept/reject ratio),
-  **integration time**, **gain**, **exposure**,
-  **plan state** + **plan target** (during a native plan), **temperature**, **humidity**, **dew-point
+  **integration time**, **gain**, **exposure**, **latest target** (the object shown in *Latest image*,
+  to caption it), **plan state** + **plan target** (during a native plan), **temperature**, **humidity**, **dew-point
   depression**, **storage free**, **Wi-Fi band**, **filter**, **autofocus temperature**,
   **controlling device**.
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
@@ -372,11 +372,14 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   description.
 - Image: **Latest image** — a single `image` entity (telescope stacks are slow stills, not a video
   feed) that always shows the most recent frame: live while observing, otherwise the newest saved
-  capture. Its `source` attribute says `live` or `archived`, and it carries a last-updated timestamp.
+  capture. Attributes: `source` (`live`/`archived`) and `target` (the object); the timestamp is the
+  frame's real capture time. Bytes are fetched over HTTP (the `/files` static server — fast and light
+  on the scope), not FTP.
 - Media source: **Vaonis** in the HA media browser — **one folder per observation** (labelled
   *Object · date*, newest first), each containing its frames **with thumbnails**; a live frame appears
-  on top while observing. Bytes are streamed through HA via a proxy view (the raw FTP storeId/`images`
-  nesting and `*.json` metadata are hidden).
+  on top while observing. Bytes are streamed through HA via a proxy view — fetched over HTTP (light on
+  the scope) and capped to a few concurrent fetches so a wall of thumbnails can't overwhelm it (the
+  raw FTP storeId/`images` nesting and `*.json` metadata are hidden).
 - Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
   button's scriptable form — adds explicit `latitude`/`longitude` and `skip_autofocus`),
   **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**

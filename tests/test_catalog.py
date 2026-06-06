@@ -7,9 +7,26 @@ from datetime import datetime
 
 from pyvaonis.catalog import get_object
 from pyvaonis.catalog import load_catalog
+from pyvaonis.catalog import observation_object_name
 from pyvaonis.catalog import visibility_rating
 from pyvaonis.catalog import visible_now
 from pyvaonis.catalog import visible_tonight
+from pyvaonis.const import file_http_url
+
+
+def test_observation_object_name() -> None:
+    found = get_object("M104")
+    assert found is not None
+    assert observation_object_name("2026-05-30_05-20-37_observation_M104") == found.display_name
+    assert observation_object_name("2026-05-30_05-20-37_observation_my_target") == "My Target"
+    assert observation_object_name("2026-05-30_05-20-37") is None
+
+
+def test_file_http_url_maps_system_to_files() -> None:
+    assert (
+        file_http_url("10.0.0.1", "/system/captures/run/images/IMG_0001.jpg")
+        == "http://10.0.0.1:8082/files/captures/run/images/IMG_0001.jpg"
+    )
 
 
 def test_visibility_rating_thresholds() -> None:

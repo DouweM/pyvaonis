@@ -10,6 +10,7 @@ from .catalog import CatalogObject
 from .catalog import VisibleObject
 from .catalog import get_object
 from .catalog import load_catalog
+from .catalog import observation_object_name
 from .catalog import visibility_rating
 from .catalog import visible_now
 from .client import VaonisClient
@@ -60,6 +61,7 @@ __all__ = [
     "is_dark",
     "load_catalog",
     "model_display_name",
+    "observation_object_name",
     "observing_window",
     "sun_altitude",
     "visibility_rating",

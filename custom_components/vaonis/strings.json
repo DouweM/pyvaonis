@@ -23,6 +23,7 @@
       "init_step": { "name": "Initialization step" },
       "operation": { "name": "Current operation" },
       "target": { "name": "Current target" },
+      "latest_target": { "name": "Latest target" },
       "step": { "name": "Current step" },
       "stacking_count": { "name": "Stacked frames" },
       "total_stacking": { "name": "Total stacked frames" },

@@ -30,8 +30,9 @@ from .coordinator import VaonisConfigEntry
 from .http import _mime_for
 
 # FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
-from .pyvaonis import get_object
+from .pyvaonis import observation_object_name
 from .pyvaonis.const import FTP_ROOT
+from .pyvaonis.const import file_http_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,15 +56,12 @@ def _is_image(name: str) -> bool:
 
 def _observation_label(store_id: str) -> str:
     """Turn a storeId into a friendly ``<Object> · <date> <time>`` label."""
-    dt_part, _, obj_part = store_id.partition("_observation_")
+    dt_part, _, _ = store_id.partition("_observation_")
     when = dt_part
     if m := _STORE_RE.match(dt_part):
         when = f"{m.group(1)} {m.group(2)}:{m.group(3)}"
-    if obj_part:
-        found = get_object(obj_part)  # cached catalog → friendly name (warmed at setup)
-        obj = found.display_name if found else obj_part.replace("_", " ")
-        return f"{obj} · {when}"
-    return when
+    obj = observation_object_name(store_id)  # cached catalog → friendly name (warmed at setup)
+    return f"{obj} · {when}" if obj else when
 
 
 def _entries(hass: HomeAssistant) -> list[VaonisConfigEntry]:
@@ -142,14 +140,18 @@ class VaonisMediaSource(MediaSource):
                     len(frames),
                     _MAX_FRAMES,
                 )
-            children = [
-                self._image(
-                    f"{entry.entry_id}|ftp|{_b64(fe.path)}",
-                    fe.name,
-                    self._proxy(entry.entry_id, "ftp", _b64(fe.path)),
+            children = []
+            for fe in frames[:_MAX_FRAMES]:
+                # Fetch bytes over HTTP (the /files static server) — far lighter on the scope than
+                # FTP, which opened a fresh connection per frame and choked on parallel thumbnails.
+                ref = _b64(file_http_url(client.ip, fe.path))
+                children.append(
+                    self._image(
+                        f"{entry.entry_id}|http|{ref}",
+                        fe.name,
+                        self._proxy(entry.entry_id, "http", ref),
+                    )
                 )
-                for fe in frames[:_MAX_FRAMES]
-            ]
             label = _observation_label(store_path.rstrip("/").split("/")[-1])
             return self._folder(item.identifier, label, children)
 

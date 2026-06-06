@@ -103,6 +103,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: VaonisConfigEntry) -> bo
     coordinator = VaonisCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
+    # Name the entry after the telescope itself (the app's telescopeName, e.g. "Stellina"), so the
+    # integration + media browser show that rather than the generic default.
+    status = coordinator.data
+    if status is not None:
+        from .pyvaonis import model_display_name
+
+        name = (status.raw.get("settings") or {}).get("telescopeName") or model_display_name(
+            status.model
+        )
+        if name and entry.title != name:
+            hass.config_entries.async_update_entry(entry, title=name)
+
     # Warm the (cached) bundled catalog off the event loop so entity setup / the select don't do a
     # blocking ~0.5 MB JSON read on the loop. After this, load_catalog() is served from cache.
     from .pyvaonis import load_catalog

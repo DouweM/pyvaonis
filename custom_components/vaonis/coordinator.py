@@ -57,6 +57,9 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         self.plan_task: asyncio.Task[None] | None = None
         # The target chosen in the select but not yet started; the Observe button reads this.
         self.selected_target: str | None = None
+        # The object shown in the Latest image (set by the image entity's background fetch); the
+        # "Latest target" sensor reads this so it can be rendered alongside the image.
+        self.latest_target: str | None = None
 
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""

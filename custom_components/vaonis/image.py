@@ -1,12 +1,12 @@
 """Image platform: the most recent frame from the telescope.
 
 A single image entity (telescope stacks are slow stills, not a video feed): it shows the live frame
-while observing, otherwise the newest saved capture over FTP. The ``source`` attribute (and the Status
-sensor) says whether you're looking at a live or an archived frame.
+while observing, otherwise the newest saved capture. The ``source`` attribute says live vs archived,
+and ``target`` names the object (mirrored on the coordinator for the "Latest target" sensor).
 
 The frame is fetched in the background and cached, so ``async_image`` returns instantly — fetching
-inline would risk exceeding Home Assistant's 10 s image-proxy timeout (the idle path lists the FTP
-capture library and downloads a JPEG over the Wi-Fi bridge, which can be slow).
+inline would risk exceeding Home Assistant's 10 s image-proxy timeout. Bytes come over HTTP (the
+``/files`` static server) rather than FTP; FTP is used only to *list* the capture library.
 """
 
 from __future__ import annotations
@@ -23,6 +23,8 @@ from homeassistant.util import dt as dt_util
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis import observation_object_name
+from .pyvaonis.const import file_http_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
         self._signature: tuple[bool, int | None] | None = None
         self._cached: bytes | None = None
         self._source: str | None = None
+        self._target: str | None = None
         self._refreshing = False
         self._stale = False
 
@@ -87,12 +90,18 @@ class VaonisImage(VaonisEntity, ImageEntity):
         self._refreshing = True
         try:
             result = await self._fetch()
-            if result is not None and result[0] != self._cached:
-                self._cached, taken_at = result
-                # Stamp with when the frame was actually taken (an archived frame reads "5 days ago",
-                # not "now"); a changed timestamp also tells the frontend to refetch.
-                self._attr_image_last_updated = taken_at or dt_util.utcnow()
-                self.async_write_ha_state()
+            if result is not None:
+                data, taken_at = result
+                target_changed = self._target != self.coordinator.latest_target
+                self.coordinator.latest_target = self._target
+                if data != self._cached:
+                    self._cached = data
+                    # Stamp with when the frame was actually taken (an archived frame reads
+                    # "5 days ago", not "now"); a changed timestamp also tells the frontend to refetch.
+                    self._attr_image_last_updated = taken_at or dt_util.utcnow()
+                    self.async_write_ha_state()
+                if target_changed:  # refresh the Latest target sensor, which reads the coordinator
+                    self.coordinator.async_update_listeners()
         finally:
             self._refreshing = False
         if self._stale:  # a change landed while we were fetching — go again
@@ -100,13 +109,19 @@ class VaonisImage(VaonisEntity, ImageEntity):
             self._request_refresh()
 
     async def _fetch(self) -> tuple[bytes, datetime | None] | None:
-        """Download the live frame if observing, otherwise the newest finished capture over FTP."""
+        """Fetch the live frame if observing, otherwise the newest finished capture.
+
+        Bytes come over HTTP (the ``/files`` static server) rather than FTP — far lighter on the
+        scope and much faster, especially for parallel media-browser thumbnails.
+        """
         client = self.coordinator.client
         img = client.current_image()
         if img is not None:
             try:
-                data = await client.download_file(img.ftp_path)
+                data = await client.fetch_image(img.static_url(client.ip))
                 self._source = "live"
+                obs = client.current_observation()
+                self._target = obs.object_name if obs else None
                 return data, dt_util.utcnow()  # live frame: just captured
             except Exception:
                 _LOGGER.debug(
@@ -115,8 +130,13 @@ class VaonisImage(VaonisEntity, ImageEntity):
         try:
             frame = await client.latest_capture()
             if frame is not None:
-                data = await client.download_file(frame.path)
+                data = await client.fetch_image(file_http_url(client.ip, frame.path))
                 self._source = "archived"
+                segments = frame.path.split("/")
+                store_id = (
+                    segments[segments.index("captures") + 1] if "captures" in segments else ""
+                )
+                self._target = observation_object_name(store_id)
                 return data, frame.modified  # the saved file's real modify time (UTC)
         except Exception:
             _LOGGER.debug("no saved Vaonis capture to show", exc_info=True)
@@ -128,5 +148,10 @@ class VaonisImage(VaonisEntity, ImageEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
-        """Whether the last-served image was the live frame or a saved capture."""
-        return {"source": self._source} if self._source else {}
+        """Expose the frame source (live|archived) and its target object for dashboards."""
+        attrs: dict[str, str] = {}
+        if self._source:
+            attrs["source"] = self._source
+        if self._target:
+            attrs["target"] = self._target
+        return attrs

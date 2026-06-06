@@ -223,6 +223,15 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         available_fn=_observing,
     ),
     VaonisSensorDescription(
+        # The object shown in the Latest image (live target while observing, else the newest saved
+        # capture's object) — pairs with the image entity for a captioned dashboard card.
+        key="latest_target",
+        translation_key="latest_target",
+        icon="mdi:image-search-outline",
+        value_fn=lambda c: c.latest_target,
+        available_fn=lambda c: bool(c.latest_target),
+    ),
+    VaonisSensorDescription(
         key="step",
         translation_key="step",
         icon="mdi:progress-clock",
