@@ -34,26 +34,25 @@ _REFRESH_TTL = (
 )
 
 
-def _target_label(obj: Any, peak_time: str | None = None) -> str:
-    """Dropdown label: ``name · for N min · at HH:MM · type · description``.
+def _target_label(obj: Any, peak: float | None = None, peak_time: str | None = None) -> str:
+    """Dropdown label: ``name · for N min · ↑43° at HH:MM · type``.
 
     We bake the key planning info into the option string because HA's select UI shows nothing but
-    that string. The peak time is when the target is highest over tonight's dark window (not the live
-    instant), so the label is stable through the night and doesn't churn the option set; the full
-    per-target breakdown (altitude, grade, magnitude, …) still lives in the ``suggestions`` attribute
-    for a custom card.
+    that string. The peak altitude/time is when the target is highest over tonight's dark window (not
+    the live instant), so the label is stable through the night and doesn't churn the option set; the
+    full per-target breakdown (live altitude, grade, magnitude, description, …) still lives in the
+    ``suggestions`` attribute for a custom card.
     """
     bits: list[str] = []
     if obj.duration:
         bits.append(f"for {obj.duration} min")
-    if peak_time:
+    if peak is not None:
+        bits.append(f"↑{round(peak)}°" + (f" at {peak_time}" if peak_time else ""))
+    elif peak_time:
         bits.append(f"at {peak_time}")
     category = obj.category_label or obj.category
     if category and category.lower() not in obj.display_name.lower():
         bits.append(category)
-    if obj.description:
-        desc = " ".join(obj.description.split())
-        bits.append(desc if len(desc) <= 80 else desc[:79].rstrip() + "…")
     return f"{obj.display_name} · {' · '.join(bits)}" if bits else obj.display_name
 
 
@@ -216,7 +215,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._suggestions = []
         for v in visible:
             best = dt_util.as_local(v.peak_time).strftime("%H:%M")
-            label = _target_label(v.obj, peak_time=best)
+            label = _target_label(v.obj, peak=v.peak_altitude, peak_time=best)
             self._target_by_label[label] = v.obj.display_name
             self._suggestions.append(
                 {
