@@ -8,6 +8,24 @@ from pyvaonis.models import ObservationBody
 from pyvaonis.models import VaonisStatus
 
 
+def test_observation_payload_omits_mosaic_and_store_by_default() -> None:
+    body = ObservationBody(object_id="M42", do_stacking=True)
+    payload = body.to_payload()
+    assert "mosaic" not in payload
+    assert "store" not in payload
+
+
+def test_observation_payload_mosaic_and_multi_night() -> None:
+    body = ObservationBody(
+        object_id="M42", do_stacking=True, mosaic_width=3.2, mosaic_height=2.2, resumable=True
+    )
+    payload = body.to_payload()
+    assert payload["mosaic"] == {"widthDegree": 3.2, "heightDegree": 2.2}
+    assert payload["store"] == {"state": "TO_BE_RESUMABLE"}
+    # the helper fields themselves are never serialised raw
+    assert "mosaic_width" not in payload and "resumable" not in payload
+
+
 def test_status_parses_aliases_and_keeps_extra() -> None:
     status = VaonisStatus.model_validate(
         {

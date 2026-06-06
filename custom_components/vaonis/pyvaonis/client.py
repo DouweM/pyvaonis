@@ -491,14 +491,27 @@ class VaonisClient:
                     "Imaging near the Sun without the Vaonis solar filter destroys the sensor. "
                     "Pass allow_solar=True only if the filter is installed."
                 )
+        mw, mh = observation.mosaic_width, observation.mosaic_height
+        if (mw is None) != (mh is None):
+            raise VaonisCommandError("mosaic needs both width and height in degrees.")
+        if mw is not None and mh is not None and (mw <= 0 or mh <= 0):
+            raise VaonisCommandError("mosaic width/height must be positive degrees.")
         return await self.post(const.Endpoint.START_OBSERVATION, observation.to_payload())
 
     async def observe_object(
-        self, object_id: str, *, allow_solar: bool = False, replace: bool = False
+        self,
+        object_id: str,
+        *,
+        allow_solar: bool = False,
+        replace: bool = False,
+        mosaic: tuple[float, float] | None = None,
+        multi_night: bool = False,
     ) -> dict[str, Any]:
         """Slew to a catalog object (by id or name) using its recommended settings.
 
         ``replace=True`` stops a running observation first (see :meth:`start_observation`).
+        ``mosaic=(width_deg, height_deg)`` captures a larger field than one frame (deep-sky only;
+        the firmware tiles it). ``multi_night=True`` saves the capture so it can be resumed later.
         """
         from .catalog import get_object
 
@@ -507,6 +520,15 @@ class VaonisClient:
             raise VaonisCommandError(f"unknown catalog object: {object_id!r}")
         try:
             observation = obj.to_observation()  # resolves ephemeris for solar objects
+            if mosaic is not None or multi_night:
+                if not observation.do_stacking:
+                    raise VaonisCommandError(
+                        f"{obj.display_name} is not a deep-sky target; mosaic/multi-night are "
+                        "only available for deep-sky objects (like the app's Advanced observation)."
+                    )
+                if mosaic is not None:
+                    observation.mosaic_width, observation.mosaic_height = mosaic
+                observation.resumable = multi_night
             # Solar bodies carry no RA/Dec on the wire (the app omits them), so the near-Sun guard
             # that start_observation runs on ra/de can't fire — check here from the resolved coords.
             if obj.is_solar and not allow_solar:
@@ -523,6 +545,47 @@ class VaonisClient:
 
     async def stop_observation(self) -> dict[str, Any]:
         return await self.post(const.Endpoint.STOP_OBSERVATION)
+
+    # -- multi-night: stored (resumable) captures ---------------------------------------
+    def stored_captures(self) -> list[dict[str, Any]]:
+        """Saved multi-night captures (``captureStore.storedCaptures``) — resumable on later nights.
+
+        Each entry carries at least a ``storeId`` plus the target/settings; read from status.
+        """
+        raw = self.status.raw if self.status else {}
+        store = raw.get("captureStore") or {}
+        return [c for c in (store.get("storedCaptures") or []) if isinstance(c, dict)]
+
+    async def resume_capture(
+        self, store_id: str, *, replace: bool = False, stop_timeout: float = 30.0
+    ) -> dict[str, Any]:
+        """Resume a saved multi-night capture, continuing to stack onto it (``storeId``).
+
+        Same preconditions as :meth:`start_observation` (initialised + idle; ``replace=True`` stops a
+        running observation first).
+        """
+        self._require_control("resume_capture")
+        assert self.status is not None
+        if self.status.active_operation:
+            if replace and self.current_observation() is not None:
+                await self.stop_observation()
+                await self._wait_idle(timeout=stop_timeout)
+            else:
+                raise VaonisCommandError("resume_capture: an operation is running; stop it first")
+        if not self.status.initialized:
+            raise VaonisCommandError(
+                "resume_capture: telescope not initialised; run autoinit first"
+            )
+        return await self.post(const.Endpoint.RESUME_FROM_STORED, {"storeId": store_id})
+
+    async def delete_stored_capture(
+        self, store_id: str, *, allow_unsafe: bool = False
+    ) -> dict[str, Any]:
+        """Delete a saved multi-night capture (irreversible — needs ``allow_unsafe``)."""
+        self._require_control("delete_stored_capture")
+        return await self.post(
+            const.Endpoint.DELETE_STORED_CAPTURE, {"storeId": store_id}, allow_unsafe=allow_unsafe
+        )
 
     # -- native plan (Plan My Night) ----------------------------------------------------
     async def start_plan(

@@ -94,6 +94,10 @@ class Endpoint:
     EXPORT_TIFF: Final = "capture/exportImageTiff"
     EXPORT_JPEGXL: Final = "capture/exportImageJpegXl"  # POST ?captureId= (no body)
     SET_TO_BE_RESUMABLE: Final = "capture/setToBeResumable"  # "Save" — persist current stack
+    # Multi-night: resume / delete a saved capture (captureStore.storedCaptures).
+    RESUME_FROM_STORED: Final = "captureStore/startObservationFromStoredCapture"
+    DELETE_STORED_CAPTURE: Final = "captureStore/deleteStoredCapture"  # destructive
+    GET_STORED_OBSERVATION: Final = "captureStore/getObservation"  # GET ?storeId=
     GENERATE_DARK: Final = "darkManager/generateDark"
     STOP_GENERATE_DARK: Final = "darkManager/stopGenerateDark"
     START_PLAN: Final = "planner/startPlan"

@@ -65,6 +65,50 @@ observe:
       default: false
       selector:
         boolean:
+    mosaic_width:
+      name: Mosaic width (°)
+      description: >-
+        Advanced/Mosaic (deep-sky only): capture a field this many degrees wide (set height too). The
+        firmware tiles it; takes much longer. Up to ~4× the instrument's single-frame field.
+      selector:
+        number: { min: 0.1, max: 10, step: any, mode: box }
+    mosaic_height:
+      name: Mosaic height (°)
+      description: Mosaic field height in degrees (set width too).
+      selector:
+        number: { min: 0.1, max: 10, step: any, mode: box }
+    multi_night:
+      name: Multi-night
+      description: Save the capture so it can be resumed on later nights (deep-sky only).
+      default: false
+      selector:
+        boolean:
+
+resume:
+  name: Resume multi-night capture
+  description: >-
+    Resume a saved multi-night capture, continuing to stack onto it. Telescope must be initialised;
+    a running observation is stopped first.
+  fields:
+    store_id:
+      name: Store ID
+      description: >-
+        Which saved capture to resume (see the "Multi-night captures" sensor's attributes). Omit if
+        only one is saved.
+      example: "2026-05-30_05-20-37_observation_moon"
+      selector:
+        text:
+
+delete_capture:
+  name: Delete multi-night capture
+  description: Permanently delete a saved multi-night capture (irreversible).
+  fields:
+    store_id:
+      name: Store ID
+      description: Which saved capture to delete (from the "Multi-night captures" sensor).
+      required: true
+      selector:
+        text:
 
 autoinit:
   name: Initialise / align

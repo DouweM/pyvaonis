@@ -269,6 +269,15 @@ def autoinit(
     )
 
 
+def _parse_mosaic(spec: str) -> tuple[float, float]:
+    """Parse a ``WxH`` degrees spec (e.g. ``3.2x2.2``) into ``(width, height)``."""
+    try:
+        w, h = spec.lower().replace(" ", "").split("x")
+        return float(w), float(h)
+    except ValueError as err:
+        raise typer.BadParameter("--mosaic must be WxH in degrees, e.g. 3.2x2.2") from err
+
+
 @app.command(rich_help_panel=PANEL_CONTROL)
 def observe(
     target: str = typer.Argument(
@@ -286,17 +295,33 @@ def observe(
     allow_solar: bool = typer.Option(
         False, "--allow-solar", help="permit Sun/near-Sun targets (solar filter only!)"
     ),
+    mosaic: str = typer.Option(
+        "", "--mosaic", help="deep-sky mosaic field WxH in degrees, e.g. 3.2x2.2 (Advanced obs.)"
+    ),
+    multi_night: bool = typer.Option(
+        False, "--multi-night", help="save the capture so it can be resumed on later nights"
+    ),
     ip: str = DEFAULT_IP,
 ) -> None:
     """Slew to a target and start imaging — `observe M42`, or `observe --ra 83.8 --de -5.4`.
 
     [IDLE ONLY unless --replace (default), which stops a running observation and takes over.]
     A catalog target uses its recommended settings; --ra/--de starts a manual observation.
+    `--mosaic`/`--multi-night` are deep-sky only (catalog targets), like the app's Advanced obs.
     """
+    mos = _parse_mosaic(mosaic) if mosaic else None
+    if (mos or multi_night) and not target:
+        raise typer.BadParameter("--mosaic/--multi-night need a catalog TARGET (deep-sky only)")
     if target:
 
         async def _go(s: VaonisClient) -> Any:
-            return await s.observe_object(target, replace=replace, allow_solar=allow_solar)
+            return await s.observe_object(
+                target,
+                replace=replace,
+                allow_solar=allow_solar,
+                mosaic=mos,
+                multi_night=multi_night,
+            )
     elif ra is not None and de is not None:
         body = ObservationBody(
             object_name=object_name,
@@ -313,6 +338,49 @@ def observe(
             return await s.start_observation(body, replace=replace, allow_solar=allow_solar)
     else:
         raise typer.BadParameter("give a catalog TARGET, or both --ra and --de for a manual target")
+
+    _print(_run(_with_client(ip, True, _go)))
+
+
+@app.command(rich_help_panel=PANEL_CONTROL)
+def captures(ip: str = DEFAULT_IP) -> None:
+    """List saved multi-night captures that can be resumed (captureStore.storedCaptures)."""
+
+    def _list(s: VaonisClient) -> list[dict[str, Any]]:
+        return s.stored_captures()
+
+    caps = _run(_with_client(ip, False, _list))  # read-only: no control needed
+    if not caps:
+        typer.echo("No saved multi-night captures.")
+        return
+    for c in caps:
+        name = (c.get("target") or {}).get("objectName") or c.get("objectName") or ""
+        typer.echo(f"{c.get('storeId', '?')}  {name}")
+
+
+@app.command(rich_help_panel=PANEL_CONTROL)
+def resume(
+    store_id: str = typer.Argument(
+        "", help="storeId to resume (see `vaonis captures`); omit if only one"
+    ),
+    replace: bool = typer.Option(
+        True, "--replace/--no-replace", help="stop a running observation first (take over)"
+    ),
+    ip: str = DEFAULT_IP,
+) -> None:
+    """Resume a saved multi-night capture, continuing to stack onto it. [IDLE ONLY unless --replace.]"""
+
+    async def _go(s: VaonisClient) -> Any:
+        sid = store_id
+        if not sid:
+            caps = s.stored_captures()
+            if len(caps) == 1:
+                sid = caps[0].get("storeId", "")
+            else:
+                raise typer.BadParameter(
+                    f"specify a storeId ({len(caps)} saved captures); see `vaonis captures`"
+                )
+        return await s.resume_capture(sid, replace=replace)
 
     _print(_run(_with_client(ip, True, _go)))
 

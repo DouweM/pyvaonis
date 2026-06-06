@@ -352,7 +352,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Stellina sensors."""
     coordinator = entry.runtime_data
-    async_add_entities(VaonisSensor(coordinator, description) for description in SENSORS)
+    entities: list[SensorEntity] = [VaonisSensor(coordinator, d) for d in SENSORS]
+    entities.append(VaonisStoredCapturesSensor(coordinator))
+    async_add_entities(entities)
 
 
 class VaonisSensor(VaonisEntity, SensorEntity):
@@ -379,3 +381,35 @@ class VaonisSensor(VaonisEntity, SensorEntity):
             return False
         available_fn = self.entity_description.available_fn
         return available_fn is None or available_fn(self.coordinator)
+
+
+class VaonisStoredCapturesSensor(VaonisEntity, SensorEntity):
+    """Count of saved multi-night captures; lists their storeIds/targets as attributes.
+
+    Lets a dashboard see what's resumable and find the ``store_id`` for the ``vaonis.resume`` service.
+    """
+
+    _attr_translation_key = "stored_captures"
+    _attr_icon = "mdi:layers-search"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the stored-captures sensor."""
+        super().__init__(coordinator, "stored_captures")
+
+    @property
+    def native_value(self) -> int:
+        """How many multi-night captures are saved."""
+        return len(self.coordinator.client.stored_captures())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The saved captures' store IDs and target names (for the resume service)."""
+        captures = [
+            {
+                "store_id": c.get("storeId"),
+                "target": (c.get("target") or {}).get("objectName") or c.get("objectName"),
+            }
+            for c in self.coordinator.client.stored_captures()
+        ]
+        return {"captures": captures}

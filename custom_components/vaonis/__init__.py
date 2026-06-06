@@ -54,9 +54,21 @@ SERVICE_OBSERVE = "observe"
 SERVICE_AUTOINIT = "autoinit"
 SERVICE_ADJUST_FRAMING = "adjust_framing"
 SERVICE_SET_CAMERA_PARAMS = "set_camera_params"
+SERVICE_RESUME = "resume"
+SERVICE_DELETE_CAPTURE = "delete_capture"
 OBSERVE_SCHEMA = vol.Schema(
-    {vol.Required("target"): str, vol.Optional("allow_solar", default=False): bool}
+    {
+        vol.Required("target"): str,
+        vol.Optional("allow_solar", default=False): bool,
+        # Advanced observation (deep-sky only): a mosaic field bigger than one frame (both degrees),
+        # and/or saving the capture for multi-night resume.
+        vol.Optional("mosaic_width"): vol.Coerce(float),
+        vol.Optional("mosaic_height"): vol.Coerce(float),
+        vol.Optional("multi_night", default=False): bool,
+    }
 )
+RESUME_SCHEMA = vol.Schema({vol.Optional("store_id"): str})
+DELETE_CAPTURE_SCHEMA = vol.Schema({vol.Required("store_id"): str})
 AUTOINIT_SCHEMA = vol.Schema(
     {
         vol.Optional("latitude"): vol.Coerce(float),
@@ -249,15 +261,56 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_STOP_PLAN, _guard_service(stop_plan))
 
     async def observe(call: ServiceCall) -> None:
-        """Slew to a catalog object (by id/name/designation) and start imaging."""
+        """Slew to a catalog object (by id/name/designation) and start imaging.
+
+        Optional mosaic (deep-sky only): pass both ``mosaic_width`` and ``mosaic_height`` (degrees).
+        ``multi_night`` saves the capture for later resume.
+        """
+        mw, mh = call.data.get("mosaic_width"), call.data.get("mosaic_height")
+        if (mw is None) != (mh is None):
+            raise HomeAssistantError("mosaic needs both mosaic_width and mosaic_height (degrees)")
+        mosaic = (mw, mh) if mw is not None and mh is not None else None
         await _first_coordinator().run_action(
             lambda c: c.observe_object(
-                call.data["target"], allow_solar=call.data["allow_solar"], replace=True
+                call.data["target"],
+                allow_solar=call.data["allow_solar"],
+                replace=True,
+                mosaic=mosaic,
+                multi_night=call.data["multi_night"],
             )
         )
 
     hass.services.async_register(
         DOMAIN, SERVICE_OBSERVE, _guard_service(observe), schema=OBSERVE_SCHEMA
+    )
+
+    async def resume(call: ServiceCall) -> None:
+        """Resume a saved multi-night capture (newest if none given), continuing its stack."""
+        coordinator = _first_coordinator()
+        store_id = call.data.get("store_id")
+        if not store_id:
+            saved = coordinator.client.stored_captures()
+            if len(saved) != 1:
+                raise HomeAssistantError(
+                    f"specify store_id ({len(saved)} saved captures)"
+                    if saved
+                    else "no saved multi-night captures to resume"
+                )
+            store_id = saved[0].get("storeId")
+        await coordinator.run_action(lambda c: c.resume_capture(store_id, replace=True))
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_RESUME, _guard_service(resume), schema=RESUME_SCHEMA
+    )
+
+    async def delete_capture(call: ServiceCall) -> None:
+        """Delete a saved multi-night capture (irreversible)."""
+        await _first_coordinator().run_action(
+            lambda c: c.delete_stored_capture(call.data["store_id"], allow_unsafe=True)
+        )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_DELETE_CAPTURE, _guard_service(delete_capture), schema=DELETE_CAPTURE_SCHEMA
     )
 
     async def autoinit(call: ServiceCall) -> None:

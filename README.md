@@ -386,13 +386,18 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   copies), the integration **proactively saves each live frame into that cache as it's captured**, so
   the observation you just ran is already instant in the gallery; older runs are cached lazily on first
   view. The raw FTP storeId/`images` nesting and `*.json` metadata are hidden.
-- Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
+- Services: **`vaonis.observe`** (slew to any catalog object; optional **mosaic** via
+  `mosaic_width`/`mosaic_height` degrees and **`multi_night`** to save for resume — deep-sky only,
+  mirroring the app's *Advanced observation*), **`vaonis.resume`** / **`vaonis.delete_capture`**
+  (resume or delete a saved multi-night capture by `store_id`), **`vaonis.autoinit`** (the Initialize
   button's scriptable form — adds explicit `latitude`/`longitude` and `skip_autofocus`),
   **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**
   (live gain/exposure/saturation, both safe mid-observation), **`vaonis.run_plan`** /
   **`vaonis.stop_plan`** (start/cancel the native autonomous plan), **`vaonis.export_capture`**
   (save a full-res image to the HA media dir). `autoinit`/`run_plan` default their location to the
   telescope's own last-known position, falling back to Home Assistant's configured home location.
+  The **Multi-night captures** sensor lists saved captures (count + `store_id`s) so you can pick one
+  to resume.
 
 Observation-, plan- and init-specific sensors (target, step, frames, gain/exposure, plan state, …)
 report **Unavailable** when the scope is idle rather than a misleading "Unknown" — they come back the

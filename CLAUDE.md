@@ -70,15 +70,19 @@ README.md PROTOCOL.md  usage / wire protocol
 - **Implemented** (client + CLI): connect/status stream, take/release control (waits for the
   status echo), autoinit, observe (catalog/manual, `replace=` stop-and-take-over), stop, park,
   shutdown, switch_frequency, **in-observation: adjust_framing, restart_autofocus, set_multi_light,
-  set_camera_params, enable_multi_night (setToBeResumable)**, **native plan (`start_plan`/`stop_plan`/
-  `plan_progress`, `planner/startPlan`)**, full-res export (tiff/jxl), FTP library, live image
-  (`image` defaults to the fast static-file fetch; `--rendered` for on-demand) + recent images,
-  catalog + "tonight" visibility (`visible_now` + `visible_tonight` over the dark window), weather
-  verdict (Open-Meteo), darkness/observing window, ephemeris (planets/Moon).
-- **Not yet**: playlist (`playlist/startPlaylist`), expertMode raw acquisition, sun/eclipse mode,
-  captureStore resume (`startObservationFromStoredCapture`/`getObservation`/`deleteStoredCapture`),
-  logs/consume + reporter, mosaic (`StartObservationBody.mosaic`), darkManager. Bodies for all of
-  these are mapped in the dig notes; see `docs/API.md`.
+  set_camera_params, enable_multi_night (setToBeResumable)**, **mosaic** (deep-sky Advanced obs. —
+  `observe_object(mosaic=(w°,h°))` → `startObservation.mosaic={widthDegree,heightDegree}`; firmware
+  tiles), **multi-night resume** (`resume_capture`/`stored_captures`/`delete_stored_capture` over
+  `captureStore/*`), **native plan (`start_plan`/`stop_plan`/`plan_progress`)**, full-res export
+  (tiff/jxl), FTP library, live image + recent images, catalog + "tonight" visibility, weather verdict
+  (Open-Meteo), darkness/observing window, ephemeris (planets/Moon).
+- **Not yet** (full coverage audit done; bodies mapped — see `docs/API.md`): playlist
+  (`playlist/startPlaylist` — RANDOM shuffle), expertMode raw acquisition (`StorageAcquisitionBody`),
+  sun/eclipse mode (`sun/*`, solar-filter-only — keep behind allow_solar), darkManager
+  (`generateDark`/`stopGenerateDark` — constants exist, no helper), logs/consume + reporter
+  (diagnostics), `planner/getPlanObservation`, `general/setUserParams` MAP field,
+  `general/openForMaintenance`, storage browse/delete. Worth-adding priority: darkManager, playlist,
+  setUserParams MAP, getPlanObservation.
 - **Safety-gated** (never auto-run): firmware upload (blocked), delete/reset (`allow_unsafe`),
   solar/sun-near (`allow_solar`). See `client._guard_endpoint`. Full map in `docs/API.md`.
 

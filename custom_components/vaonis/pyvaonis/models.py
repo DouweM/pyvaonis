@@ -126,10 +126,26 @@ class ObservationBody(BaseModel):
     observation_type: str = Field(default="STANDARD", serialization_alias="observationType")
     algorithm: str = Field(default="AUTO", serialization_alias="algorithm")
     bright_zone_offset: str | None = Field(default=None, serialization_alias="brightZoneOffset")
+    # Mosaic ("Advanced observation"): capture a field bigger than one frame. Only the angular size in
+    # degrees is sent as a nested ``mosaic`` object; the firmware computes the tiling. Deep-sky only.
+    mosaic_width: float | None = None
+    mosaic_height: float | None = None
+    # Multi-night: persist the capture so it can be resumed on later nights (the app sets this in the
+    # start body as ``store.state = TO_BE_RESUMABLE``; equivalent to capture/setToBeResumable later).
+    resumable: bool = False
 
     def to_payload(self) -> dict[str, Any]:
-        """JSON body with ``None`` fields dropped."""
-        return self.model_dump(by_alias=True, exclude_none=True)
+        """JSON body with ``None`` fields dropped; mosaic/store nested as the firmware expects."""
+        body = self.model_dump(
+            by_alias=True,
+            exclude_none=True,
+            exclude={"mosaic_width", "mosaic_height", "resumable"},
+        )
+        if self.mosaic_width is not None and self.mosaic_height is not None:
+            body["mosaic"] = {"widthDegree": self.mosaic_width, "heightDegree": self.mosaic_height}
+        if self.resumable:
+            body["store"] = {"state": "TO_BE_RESUMABLE"}
+        return body
 
 
 class PlanTargetBody(BaseModel):

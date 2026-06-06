@@ -38,7 +38,8 @@
       "gain": { "name": "Gain" },
       "exposure": { "name": "Exposure" },
       "plan_state": { "name": "Plan state" },
-      "plan_target": { "name": "Plan target" }
+      "plan_target": { "name": "Plan target" },
+      "stored_captures": { "name": "Multi-night captures" }
     },
     "image": {
       "image": { "name": "Latest image" }
