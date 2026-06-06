@@ -748,7 +748,10 @@ class VaonisClient:
                 if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
             ]
             if frames:
-                return max(frames, key=lambda e: e.name)
+                best = max(frames, key=lambda e: e.name)
+                if best.modified is None:  # MLSD didn't report it — ask explicitly via MDTM
+                    best.modified = await ftp.modified_time(best.path, ip=self.ip)
+                return best
         return None
 
     async def latest_capture_path(self) -> str | None:

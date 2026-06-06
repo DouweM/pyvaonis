@@ -31,6 +31,11 @@ class FakeFTP:
     def retrbinary(self, cmd: str, callback) -> None:
         callback(self._blobs[cmd.split(" ", 1)[1]])
 
+    def sendcmd(self, cmd: str) -> str:
+        if cmd.startswith("MDTM "):
+            return "213 20260530020915"
+        raise AssertionError(cmd)
+
 
 @pytest.fixture(autouse=True)
 def _fake_ftp(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,3 +64,8 @@ def test_parse_mlsd_time() -> None:
 async def test_download_returns_bytes() -> None:
     data = await ftp_mod.download("/user/obs1/M42.jpg", ip="10.0.0.1")
     assert data == b"JPEGDATA"
+
+
+async def test_modified_time_via_mdtm() -> None:
+    when = await ftp_mod.modified_time("/user/obs1/M42.jpg", ip="10.0.0.1")
+    assert when == datetime(2026, 5, 30, 2, 9, 15, tzinfo=UTC)

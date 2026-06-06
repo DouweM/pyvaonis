@@ -109,6 +109,18 @@ def _download(ip: str, path: str, timeout: float) -> bytes:
         ftp.close()
 
 
+def _modified(ip: str, path: str, timeout: float) -> datetime | None:
+    ftp = _connect(ip, timeout)
+    try:
+        # MDTM <path> -> "213 YYYYMMDDHHMMSS[.frac]" (UTC); widely supported even without MLSD.
+        _, _, stamp = ftp.sendcmd(f"MDTM {path}").partition(" ")
+        return _parse_mlsd_time(stamp.strip())
+    except all_errors:
+        return None
+    finally:
+        ftp.close()
+
+
 async def list_dir(
     path: str = FTP_ROOT, *, ip: str = DEFAULT_IP, timeout: float = 20.0
 ) -> list[FtpEntry]:
@@ -129,3 +141,10 @@ async def download(path: str, *, ip: str = DEFAULT_IP, timeout: float = 60.0) ->
         return await asyncio.to_thread(_download, ip, path, timeout)
     except all_errors as err:
         raise VaonisConnectionError(f"FTP download {path!r} failed: {err}") from err
+
+
+async def modified_time(
+    path: str, *, ip: str = DEFAULT_IP, timeout: float = 20.0
+) -> datetime | None:
+    """The file's modification time (UTC) via MDTM, or None if the server won't report it."""
+    return await asyncio.to_thread(_modified, ip, path, timeout)
