@@ -11,15 +11,19 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis import VaonisError
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_now
+from .pyvaonis.const import BALENS_LEVELS
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
@@ -31,8 +35,37 @@ async def async_setup_entry(
     entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the target select."""
-    async_add_entities([VaonisTargetSelect(entry.runtime_data, hass)])
+    """Set up the target select and the BalENS-level select."""
+    async_add_entities(
+        [VaonisTargetSelect(entry.runtime_data, hass), VaonisBalensLevelSelect(entry.runtime_data)]
+    )
+
+
+class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):
+    """BalENS (HDR background) processing level — Recommended / Soft / Hard / First Edition."""
+
+    _attr_translation_key = "balens_level"
+    _attr_icon = "mdi:hdr"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the BalENS-level select."""
+        super().__init__(coordinator, "balens_level")
+        self._attr_options = list(BALENS_LEVELS)
+
+    @property
+    def current_option(self) -> str | None:
+        """The level from `settings.algoHdrBackground`, or None if unknown."""
+        settings = self._status_value("settings")
+        algo = settings.get("algoHdrBackground") if isinstance(settings, dict) else None
+        return algo if algo in self._attr_options else None
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the BalENS level (one-shot: take control, set, release)."""
+        try:
+            await self.coordinator.run_action(lambda c: c.set_balens_level(option))
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
 
 
 class VaonisTargetSelect(VaonisEntity, SelectEntity):

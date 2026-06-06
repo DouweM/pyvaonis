@@ -717,23 +717,33 @@ class VaonisClient:
             raise VaonisCommandError("set_camera_params: nothing to change")
         return await self.post(const.Endpoint.SET_USER_PARAMS, body)
 
-    async def set_multi_light(self, enabled: bool) -> dict[str, Any]:
-        """Toggle Multi-Light (CovalENS / HDR background; firmware >= 2.28).
-
-        Merges the current settings so other settings aren't reset.
-        """
-        self._require_control("set_multi_light")
+    async def _update_settings(self, **changes: Any) -> dict[str, Any]:
+        """Apply ``changes`` to the device settings, echoing the rest (setSettings may replace)."""
+        self._require_control("update_settings")
         current = (self.status.raw.get("settings") or {}) if self.status else {}
-        # Echo back all known settings (setSettings may replace, not merge) + the toggle.
         keep = ("telescopeName", "storageFileCategories", "usbFileTypes", "enableLiveFocus",
-                "enableFullResolution", "enableDithering", "enableDarkUsage", "algoHdrBackground",
-                "buttonBrightness")  # fmt: skip
+                "enableFullResolution", "enableDithering", "enableDarkUsage", "enableHdrBackground",
+                "algoHdrBackground", "buttonBrightness")  # fmt: skip
         body = {k: current[k] for k in keep if k in current}
-        body["enableHdrBackground"] = enabled
-        # These two are non-nullable in SettingsBody — supply the firmware defaults if status omits them.
+        body.update(changes)
+        # These two are non-nullable in SettingsBody — supply firmware defaults if status omits them.
         body.setdefault("buttonBrightness", "MEDIUM")
         body.setdefault("algoHdrBackground", "RECOMMENDED")
         return await self.post(const.Endpoint.SET_SETTINGS, body)
+
+    async def set_multi_light(self, enabled: bool, *, level: str | None = None) -> dict[str, Any]:
+        """Toggle BalENS (the app's HDR-background processing; firmware >= 2.28).
+
+        Optionally set the processing ``level`` at the same time (see :meth:`set_balens_level`).
+        """
+        changes: dict[str, Any] = {"enableHdrBackground": enabled}
+        if level is not None:
+            changes["algoHdrBackground"] = const.normalize_balens_level(level)
+        return await self._update_settings(**changes)
+
+    async def set_balens_level(self, level: str) -> dict[str, Any]:
+        """Set the BalENS processing level: RECOMMENDED / SOFT / HARD / OLD (First Edition)."""
+        return await self._update_settings(algoHdrBackground=const.normalize_balens_level(level))
 
     async def enable_multi_night(self) -> dict[str, Any]:
         """Enable "multi-night": keep the current stack in the telescope's stored-captures library

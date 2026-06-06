@@ -30,8 +30,21 @@
       "integration": { "name": "Integration time" },
       "dewpoint_depression": { "name": "Dew point depression" },
       "storage_free": { "name": "Storage free" },
-      "band": { "name": "Wi-Fi band" },
-      "filter": { "name": "Filter" },
+      "band": {
+        "name": "Wi-Fi band",
+        "state": { "BAND_2_4_GHZ": "2.4 GHz", "BAND_5_GHZ": "5 GHz" }
+      },
+      "filter": {
+        "name": "Filter",
+        "state": {
+          "NONE": "No filter",
+          "DUST": "Lens cap",
+          "SOLAR": "Solar",
+          "CLS": "CLS",
+          "DUAL": "Dual",
+          "IR": "IR"
+        }
+      },
       "autofocus_temperature": { "name": "Autofocus temperature" },
       "controlling_device": { "name": "Controlling device" },
       "frames_acquired": { "name": "Frames acquired" },
@@ -65,7 +78,16 @@
       "enable_multi_night": { "name": "Enable multi-night" }
     },
     "select": {
-      "target": { "name": "Tonight's target" }
+      "target": { "name": "Tonight's target" },
+      "balens_level": {
+        "name": "BalENS level",
+        "state": {
+          "RECOMMENDED": "Recommended",
+          "SOFT": "Soft",
+          "HARD": "Hard",
+          "OLD": "First Edition"
+        }
+      }
     },
     "switch": {
       "multi_light": { "name": "BalENS (HDR background)" },

@@ -50,6 +50,7 @@ class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
 
     _attr_translation_key = "multi_light"
     _attr_icon = "mdi:hdr"
+    _attr_entity_category = EntityCategory.CONFIG  # a device setting, not a primary control
 
     def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the switch."""
@@ -73,12 +74,12 @@ class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
         return bool(algo) and str(algo).upper() not in ("NONE", "OFF")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable Multi-Light."""
-        await self.coordinator.client.set_multi_light(True)
+        """Enable BalENS (one-shot: take control, set, release)."""
+        await self.coordinator.run_action(lambda c: c.set_multi_light(True))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable Multi-Light."""
-        await self.coordinator.client.set_multi_light(False)
+        """Disable BalENS (one-shot: take control, set, release)."""
+        await self.coordinator.run_action(lambda c: c.set_multi_light(False))
 
 
 class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):

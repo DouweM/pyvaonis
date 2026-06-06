@@ -145,8 +145,14 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   enable conditions (take-control only when `masterDeviceId==null`, release only when we're master,
   park only idle+not-parked, observe only idle+initialized+target-chosen, stop/refocus/multi-night
   only while observing, enable-multi-night also needs ≥1 stacked frame and not-already-resumable).
-  EntityCategory: observing activity/telemetry primary, device housekeeping diagnostic (rule in
-  sensor.py). Controlling-device sensor shows "Nobody" when `masterDeviceId` is null. The Connectivity
+  EntityCategory: observing **activity/telemetry & actions = primary controls** (status, observe/stop/
+  init buttons, target select, image); **settings = CONFIG** (BalENS switch + level select, mosaic/
+  multi-night toggles + mosaic-size numbers); **device health/info = DIAGNOSTIC** (env, storage, band,
+  filter, control state). Controlling-device sensor shows "Nobody" when `masterDeviceId` is null. The
+  `band`/`filter` sensors are ENUM (device_class) with `state` translations so they read "2.4 GHz" /
+  "No filter" not raw enums. **BalENS** = the app's HDR-background processing (`enableHdrBackground` +
+  `algoHdrBackground` level RECOMMENDED/SOFT/HARD/OLD; OLD = "First Edition"); switch/select/CLI
+  (`balens-level`) all route through `coordinator.run_action` (settings need control — HA is read-only). The Connectivity
   binary_sensor is `always_available` (reports **off** when the scope is unreachable instead of going
   Unavailable like everything else). Coordinator has a 30s watchdog `update_interval` that reconnects
   after the scope is powered back on (cheap no-op while connected) — so entities recover without a reload.

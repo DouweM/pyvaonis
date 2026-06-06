@@ -259,6 +259,15 @@ def multi_light(
 
 
 @app.command(rich_help_panel=PANEL_CONTROL)
+def balens_level(
+    level: str = typer.Argument(..., help="Recommended | Soft | Hard | First-Edition"),
+    ip: str = DEFAULT_IP,
+) -> None:
+    """Set the BalENS (HDR background) processing level. [SAFE DURING OBSERVATION]"""
+    _print(_run(_with_client(ip, True, lambda s: s.set_balens_level(level))))
+
+
+@app.command(rich_help_panel=PANEL_CONTROL)
 def multi_night(ip: str = DEFAULT_IP) -> None:
     """Multi-night: mark the current stack resumable so it can keep integrating on a later night.
 

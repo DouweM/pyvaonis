@@ -139,3 +139,17 @@ MSG_SET_SYSTEM_TIME: Final = "setSystemTime"
 # Wi-Fi band values for SWITCH_FREQUENCY (NetworkBody.band).
 BAND_2_4_GHZ: Final = "BAND_2_4_GHZ"
 BAND_5_GHZ: Final = "BAND_5_GHZ"
+
+# BalENS (HDR background) processing levels — `settings.algoHdrBackground` (StellinaSettings.BalensMode).
+# OLD is the app's "First Edition". RECOMMENDED/SOFT/HARD/OLD are the wire values.
+BALENS_LEVELS: Final = ("RECOMMENDED", "SOFT", "HARD", "OLD")
+
+
+def normalize_balens_level(level: str) -> str:
+    """Map a user-given BalENS level to a wire value, accepting 'first edition'/'first_edition'."""
+    key = level.strip().upper().replace(" ", "_").replace("-", "_")
+    if key in ("FIRST_EDITION", "FIRSTEDITION"):
+        key = "OLD"
+    if key not in BALENS_LEVELS:
+        raise ValueError(f"invalid BalENS level {level!r}; use one of {', '.join(BALENS_LEVELS)}")
+    return key

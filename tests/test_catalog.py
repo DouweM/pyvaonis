@@ -22,6 +22,19 @@ def test_observation_object_name() -> None:
     assert observation_object_name("2026-05-30_05-20-37") is None
 
 
+def test_normalize_balens_level() -> None:
+    import pytest
+
+    from pyvaonis.const import normalize_balens_level
+
+    assert normalize_balens_level("recommended") == "RECOMMENDED"
+    assert normalize_balens_level("Soft") == "SOFT"
+    assert normalize_balens_level("First Edition") == "OLD"
+    assert normalize_balens_level("first-edition") == "OLD"
+    with pytest.raises(ValueError):
+        normalize_balens_level("bogus")
+
+
 def test_file_http_url_maps_system_to_files() -> None:
     assert (
         file_http_url("10.0.0.1", "/system/captures/run/images/IMG_0001.jpg")
