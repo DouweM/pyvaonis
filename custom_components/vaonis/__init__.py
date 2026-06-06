@@ -103,6 +103,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: VaonisConfigEntry) -> bo
     coordinator = VaonisCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
+    # Warm the (cached) bundled catalog off the event loop so entity setup / the select don't do a
+    # blocking ~0.5 MB JSON read on the loop. After this, load_catalog() is served from cache.
+    from .pyvaonis import load_catalog
+
+    await hass.async_add_executor_job(load_catalog)
+
     entry.runtime_data = coordinator
     register_view(hass)
     _register_services(hass)

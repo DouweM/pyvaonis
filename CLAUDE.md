@@ -119,6 +119,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   binary_sensor is `always_available` (reports **off** when the scope is unreachable instead of going
   Unavailable like everything else). Coordinator has a 30s watchdog `update_interval` that reconnects
   after the scope is powered back on (cheap no-op while connected) — so entities recover without a reload.
+  **No blocking I/O on the loop**: `load_catalog()` (cached ~0.5 MB JSON read) is warmed via
+  `async_add_executor_job` in `async_setup_entry` before platforms load; FTP (`ftp.list_dir`/`download`)
+  runs via `asyncio.to_thread`; the image entity fetches frames in a background task and caches them
+  (so `async_image` returns instantly, under HA's 10 s image-proxy timeout).
 - Next API surfaces (bodies mapped): captureStore resume, playlist, sun/eclipse, expert raw, mosaic.
 
 ## Control / observation ordering (mirrors the app — verified in decompiled source)
