@@ -733,8 +733,8 @@ class VaonisClient:
         """Download a saved file from the library by its FTP path."""
         return await ftp.download(path, ip=self.ip)
 
-    async def latest_capture_path(self) -> str | None:
-        """FTP path of the last frame in the newest finished capture run, or None if none.
+    async def latest_capture(self) -> FtpEntry | None:
+        """The last frame (an :class:`FtpEntry`, with its modify time) in the newest finished run.
 
         Reads the on-disk capture library (``/system/captures``, date-prefixed storeIds) rather than
         status, so it finds the real most-recent observation even when the scope is idle. Plan dirs
@@ -748,8 +748,13 @@ class VaonisClient:
                 if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
             ]
             if frames:
-                return max(frames, key=lambda e: e.name).path
+                return max(frames, key=lambda e: e.name)
         return None
+
+    async def latest_capture_path(self) -> str | None:
+        """FTP path of the last frame in the newest finished capture run, or None if none."""
+        entry = await self.latest_capture()
+        return entry.path if entry else None
 
     async def park(self) -> dict[str, Any]:
         """Return the arm to its parked position (refused mid-operation; stop first)."""

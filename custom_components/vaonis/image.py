@@ -12,6 +12,7 @@ capture library and downloads a JPEG over the Wi-Fi bridge, which can be slow).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import HomeAssistant
@@ -85,10 +86,12 @@ class VaonisImage(VaonisEntity, ImageEntity):
     async def _refresh(self) -> None:
         self._refreshing = True
         try:
-            data = await self._fetch()
-            if data is not None and data != self._cached:
-                self._cached = data
-                self._attr_image_last_updated = dt_util.utcnow()  # tells the frontend to refetch
+            result = await self._fetch()
+            if result is not None and result[0] != self._cached:
+                self._cached, taken_at = result
+                # Stamp with when the frame was actually taken (an archived frame reads "5 days ago",
+                # not "now"); a changed timestamp also tells the frontend to refetch.
+                self._attr_image_last_updated = taken_at or dt_util.utcnow()
                 self.async_write_ha_state()
         finally:
             self._refreshing = False
@@ -96,7 +99,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
             self._stale = False
             self._request_refresh()
 
-    async def _fetch(self) -> bytes | None:
+    async def _fetch(self) -> tuple[bytes, datetime | None] | None:
         """Download the live frame if observing, otherwise the newest finished capture over FTP."""
         client = self.coordinator.client
         img = client.current_image()
@@ -104,17 +107,17 @@ class VaonisImage(VaonisEntity, ImageEntity):
             try:
                 data = await client.download_file(img.ftp_path)
                 self._source = "live"
-                return data
+                return data, dt_util.utcnow()  # live frame: just captured
             except Exception:
                 _LOGGER.debug(
                     "live frame unavailable, falling back to saved capture", exc_info=True
                 )
         try:
-            frame = await client.latest_capture_path()
+            frame = await client.latest_capture()
             if frame is not None:
-                data = await client.download_file(frame)
+                data = await client.download_file(frame.path)
                 self._source = "archived"
-                return data
+                return data, frame.modified  # the saved file's real modify time (UTC)
         except Exception:
             _LOGGER.debug("no saved Vaonis capture to show", exc_info=True)
         return None

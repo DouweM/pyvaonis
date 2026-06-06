@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import posixpath
 from dataclasses import dataclass
+from datetime import UTC
+from datetime import datetime
 from ftplib import FTP
 from ftplib import all_errors
 from ftplib import error_perm
@@ -27,6 +29,14 @@ class FtpEntry:
     path: str
     is_dir: bool
     size: int | None = None
+    modified: datetime | None = None  # UTC, from the MLSD ``modify`` fact (when available)
+
+
+def _parse_mlsd_time(value: str | None) -> datetime | None:
+    """Parse an MLSD ``modify`` fact (``YYYYMMDDHHMMSS[.frac]``, UTC) to a datetime."""
+    if not value or len(value) < 14 or not value[:14].isdigit():
+        return None
+    return datetime.strptime(value[:14], "%Y%m%d%H%M%S").replace(tzinfo=UTC)
 
 
 class _NatFTP(FTP):
@@ -65,6 +75,7 @@ def _list(ip: str, path: str, timeout: float) -> list[FtpEntry]:
                         path=posixpath.join(path, name),
                         is_dir=facts.get("type") == "dir",
                         size=int(size) if size and size.isdigit() else None,
+                        modified=_parse_mlsd_time(facts.get("modify")),
                     )
                 )
         except error_perm:
