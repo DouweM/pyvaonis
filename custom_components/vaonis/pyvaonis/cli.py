@@ -542,23 +542,8 @@ def _run_label(url_path: str) -> str:
 
 
 async def _latest_capture_frame(scope: VaonisClient) -> str | None:
-    """FTP path of the last frame in the newest /system/captures run (None if none).
-
-    Uses the on-disk capture library (date-prefixed storeIds), not status — so it finds your real
-    most-recent observation. Plan dirs (/system/plan) are ignored.
-    """
-    caps = [e for e in await scope.library(const.FTP_ROOT) if e.is_dir]
-    for cap in sorted(
-        caps, key=lambda e: e.name, reverse=True
-    ):  # storeId date-prefixed → newest 1st
-        frames = [
-            e
-            for e in await scope.library(f"{cap.path}/images")
-            if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
-        ]
-        if frames:
-            return max(frames, key=lambda e: e.name).path
-    return None
+    """FTP path of the last frame in the newest /system/captures run (None if none)."""
+    return await scope.latest_capture_path()
 
 
 def _capture_frame_name(frame_path: str) -> str:

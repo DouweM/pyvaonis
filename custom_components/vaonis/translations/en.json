@@ -40,7 +40,8 @@
       "plan_target": { "name": "Plan target" }
     },
     "camera": {
-      "live": { "name": "Live view" }
+      "live": { "name": "Live view" },
+      "latest": { "name": "Latest image" }
     },
     "binary_sensor": {
       "initialized": { "name": "Initialized" },

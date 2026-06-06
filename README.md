@@ -275,7 +275,7 @@ connected and watch `plan_progress().finished` if you want to `request_shutdown(
 - **In Home Assistant: gate on your own weather entity** (don't duplicate it here). If you run the
   [microclimate](https://github.com/DouweM/ha-microclimate) integration, `weather.microclimate` is a
   calibrated ensemble forecast for your exact site plus live PWS conditions (humidity → dew, wind,
-  precipitation, `condition`) — far better than a generic API call. `stellina.run_plan` deliberately
+  precipitation, `condition`) — far better than a generic API call. `vaonis.run_plan` deliberately
   does **no** weather gating; you gate the automation that calls it (see below).
 
 **Can the whole night run unattended?** Almost entirely — with one hardware caveat:
@@ -285,7 +285,7 @@ connected and watch `plan_progress().finished` if you want to `request_shutdown(
 > applied) and have your automation switch it on at dusk; otherwise leave it powered and use `park`
 > between nights instead of `shutdown`.
 
-Everything else is automatable. The **`stellina.run_plan`** service runs a whole night in the
+Everything else is automatable. The **`vaonis.run_plan`** service runs a whole night in the
 background and self-gates on darkness; you put the **weather/dew go-no-go in the automation's
 conditions** using your own entities, so one daily automation suffices:
 
@@ -310,15 +310,15 @@ automation:
       - service: switch.turn_on
         target: { entity_id: switch.stellina_power }
       - delay: "00:02:00"
-      - service: stellina.run_plan
+      - service: vaonis.run_plan
         data:
           targets: ["M42:30", "Andromeda Galaxy:45", "Jupiter:10"]
           wait_for_dark: true          # schedule the start at the next dusk (Sun below -10°)
       # the firmware runs the night itself and parks at the end; (optional) cut power later
 ```
 
-`stellina.run_plan` uploads the native plan and returns immediately (`{started: true}`); the scope
-then runs autonomously. `stellina.stop_plan` cancels it. The same plan is available standalone from
+`vaonis.run_plan` uploads the native plan and returns immediately (`{started: true}`); the scope
+then runs autonomously. `vaonis.stop_plan` cancels it. The same plan is available standalone from
 the CLI: `vaonis plan M42:30 M51:20 … LAT LON --wait-for-dark`.
 
 ## Full-res export & saved library
@@ -363,14 +363,23 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 - Switch: **Multi-Light (HDR)** (CovalENS).
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting starts
   the observation. `suggestions` attribute carries name/altitude/magnitude/constellation/description.
-- Camera: **Live view** of the current stacked frame.
-- Media source: **Stellina** in the HA media browser — *Recent captures* (live) and *Saved library*
-  (FTP `/system/captures`), streamed through HA via a proxy view.
-- Services: **`stellina.observe`** (slew to any catalog object), **`stellina.autoinit`** (initialise/
-  align), **`stellina.adjust_framing`** (Change Framing) and **`stellina.set_camera_params`**
-  (live gain/exposure/saturation, both safe mid-observation), **`stellina.run_plan`** /
-  **`stellina.stop_plan`** (start/cancel the native autonomous plan), **`stellina.export_capture`**
-  (save a full-res image to the HA media dir).
+- Cameras: **Live view** of the current stacked frame (only available while observing), and
+  **Latest image** — always shows the most recent image: the live frame while observing, otherwise
+  the newest saved capture (its `source` attribute says `live` or `archived`), so a dashboard card is
+  never blank.
+- Media source: **Vaonis** in the HA media browser — *Recent captures* (newest run, live frame on top)
+  and *Saved library* (FTP `/system/captures`), streamed through HA via a proxy view.
+- Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (initialise/
+  align), **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**
+  (live gain/exposure/saturation, both safe mid-observation), **`vaonis.run_plan`** /
+  **`vaonis.stop_plan`** (start/cancel the native autonomous plan), **`vaonis.export_capture`**
+  (save a full-res image to the HA media dir). `autoinit`/`run_plan` default their location to the
+  telescope's own last-known position, falling back to Home Assistant's configured home location.
+
+Observation-, plan- and init-specific sensors (target, step, frames, gain/exposure, plan state, …)
+report **Unavailable** when the scope is idle rather than a misleading "Unknown" — they come back the
+moment the relevant operation starts. The always-meaningful ones (Status, temperature, humidity,
+storage, Wi-Fi band, filter) stay populated.
 
 Still **not** surfaced (and why): Wi-Fi-band switch, firmware upload, factory reset/delete (all
 deliberately omitted — link-drop / brick / data-loss); and sun-eclipse, expert raw capture, playlist,

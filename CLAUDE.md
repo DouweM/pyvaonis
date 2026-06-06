@@ -31,8 +31,8 @@ install it as a custom repo without a PyPI release), CI green (lint/typecheck/te
 - One controller at a time: **take-control demotes the phone app**; read-only status works for any client.
 - The app's "Save" = save-to-phone (not a scope op). Telescope-side persist = `capture/setToBeResumable`.
 
-## Bridge to the LAN (planned, not yet built)
-Scope is AP-only → needs a Wi-Fi bridge. Plan: GL.iNet **GL-MT300N-V2 "Mango"** in **repeater mode**
+## Bridge to the LAN (built & working ✅)
+Scope is AP-only → needs a Wi-Fi bridge. GL.iNet **GL-MT300N-V2 "Mango"** in **repeater mode**
 joins the Stellina AP (Stellina = Mango's WAN/`wwan`, 10.0.0.x). The Mango's **LAN (Ethernet)** gets a
 **static IP on the oasys IoT VLAN (10.3.142.50/24), DHCP off**, plugged into a UDM IoT port. **UDM
 static route 10.0.0.0/24 → 10.3.142.50**; the Mango NATs LAN→Stellina (default), so all ports route
@@ -40,8 +40,9 @@ static route 10.0.0.0/24 → 10.3.142.50**; the Mango NATs LAN→Stellina (defau
 path (passive + skip-pasv-ip); only enable the Mango FTP conntrack helper if `vaonis library` stalls
 (it's really needed for the port-forward/DNAT variant). Repeater **auto-reconnects** when the scope
 powers on (~1-2 min warm-up; no API trigger); the
-Mango stays up on Ethernet meanwhile. Full recipe in `README.md` → "Wi-Fi bridge". (User is buying the
-Mango.)
+Mango stays up on Ethernet meanwhile. Full recipe in `README.md` → "Wi-Fi bridge". Brought up
+end-to-end (status/library/image over the route; gotcha: the UniFi port must carry the IoT VLAN as
+**native/untagged**, and the Mango needs a return route `10.3.0.0/16 → 10.3.142.1`).
 
 ## Repo layout
 ```
@@ -100,7 +101,12 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Step 1: re-extract catalog keeping `distance/realSize/discoveredBy` + bundle `catalog_object/*.png`
   (lowercased id, rotate 90°) + `constellations.json`.
 - HA: media-source over `/files`/FTP `/system/captures`; `run_plan`/`stop_plan` now drive the native
-  Plan-My-Night (`client.start_plan`/`stop_plan`).
+  Plan-My-Night (`client.start_plan`/`stop_plan`). Two cameras: **Live view** (live-only, unavailable
+  when idle) and **Latest image** (`VaonisLatestCamera` — live frame while observing, else newest FTP
+  capture via `client.latest_capture_path()`; `source` attr = live|archived). Observation/plan/init
+  sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle. `autoinit`/`run_plan`
+  default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
+  from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
 - Next API surfaces (bodies mapped): captureStore resume, playlist, sun/eclipse, expert raw, mosaic.
 
 ## Control / observation ordering (mirrors the app — verified in decompiled source)

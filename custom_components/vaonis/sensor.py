@@ -24,9 +24,29 @@ from .entity import VaonisEntity
 
 @dataclass(frozen=True, kw_only=True)
 class VaonisSensorDescription(SensorEntityDescription):
-    """Sensor description with a value extractor over the coordinator."""
+    """Sensor description with a value extractor over the coordinator.
+
+    ``available_fn`` lets a sensor report *unavailable* (rather than an "Unknown" None) when it has
+    no applicable value — e.g. observation stats while the scope is idle.
+    """
 
     value_fn: Callable[[VaonisCoordinator], Any]
+    available_fn: Callable[[VaonisCoordinator], bool] | None = None
+
+
+def _observing(coordinator: VaonisCoordinator) -> bool:
+    """Whether an observation is currently running (its live stats are meaningful)."""
+    return coordinator.client.current_observation() is not None
+
+
+def _planning(coordinator: VaonisCoordinator) -> bool:
+    """Whether a native plan is currently running."""
+    return coordinator.client.plan_progress() is not None
+
+
+def _initializing(coordinator: VaonisCoordinator) -> bool:
+    """Whether an auto-init is currently in progress."""
+    return coordinator.client.autoinit_step() is not None
 
 
 def _sensors_field(key: str) -> Any:
@@ -152,6 +172,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         translation_key="init_step",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_init_step,
+        available_fn=_initializing,
     ),
     VaonisSensorDescription(
         key="temperature",
@@ -182,22 +203,26 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         key="operation",
         translation_key="operation",
         value_fn=_operation,
+        available_fn=lambda c: _operation(c) is not None,
     ),
     VaonisSensorDescription(
         key="target",
         translation_key="target",
         value_fn=_target,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="step",
         translation_key="step",
         value_fn=_step,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="stacking_count",
         translation_key="stacking_count",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_stacking,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="integration",
@@ -206,12 +231,14 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_integration,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="total_stacking",
         translation_key="total_stacking",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_total_stacking,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="storage_free",
@@ -254,6 +281,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         translation_key="frames_acquired",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_frames_acquired,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="gain",
@@ -261,6 +289,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_gain,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="exposure",
@@ -269,16 +298,19 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.SECONDS,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_exposure_seconds,
+        available_fn=_observing,
     ),
     VaonisSensorDescription(
         key="plan_state",
         translation_key="plan_state",
         value_fn=_plan_state,
+        available_fn=_planning,
     ),
     VaonisSensorDescription(
         key="plan_target",
         translation_key="plan_target",
         value_fn=_plan_target,
+        available_fn=_planning,
     ),
 )
 
@@ -309,3 +341,11 @@ class VaonisSensor(VaonisEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the current value."""
         return self.entity_description.value_fn(self.coordinator)
+
+    @property
+    def available(self) -> bool:
+        """Unavailable (rather than 'Unknown') when the value doesn't apply right now."""
+        if not super().available:
+            return False
+        available_fn = self.entity_description.available_fn
+        return available_fn is None or available_fn(self.coordinator)
