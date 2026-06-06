@@ -17,12 +17,12 @@ from homeassistant.components.media_source import PlayMedia
 from homeassistant.components.media_source import Unresolvable
 from homeassistant.core import HomeAssistant
 
-# FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
-from pyvaonis.const import FTP_ROOT
-
 from .const import DOMAIN
 from .coordinator import VaonisConfigEntry
 from .http import _mime_for
+
+# FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
+from .pyvaonis.const import FTP_ROOT
 
 
 async def async_get_media_source(hass: HomeAssistant) -> VaonisMediaSource:

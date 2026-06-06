@@ -16,12 +16,11 @@ from homeassistant.core import ServiceResponse
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
-from pyvaonis import VaonisError
-
 from .const import DOMAIN
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .http import register_view
+from .pyvaonis import VaonisError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,8 +177,8 @@ def _register_services(hass: HomeAssistant) -> None:
         from datetime import UTC
         from datetime import datetime
 
-        from pyvaonis import PlanItem
-        from pyvaonis import observing_window
+        from .pyvaonis import PlanItem
+        from .pyvaonis import observing_window
 
         coordinator = _first_coordinator()
         lat, lon = hass.config.latitude, hass.config.longitude

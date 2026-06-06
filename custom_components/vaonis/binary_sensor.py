@@ -124,15 +124,15 @@ class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """True when observing is possible (it is dark)."""
-        from pyvaonis import is_dark
+        from .pyvaonis import is_dark
 
         return is_dark(self._hass.config.latitude, self._hass.config.longitude)
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Expose the Sun altitude and tonight's dark window."""
-        from pyvaonis import observing_window
-        from pyvaonis import sun_altitude
+        from .pyvaonis import observing_window
+        from .pyvaonis import sun_altitude
 
         lat, lon = self._hass.config.latitude, self._hass.config.longitude
         window = observing_window(lat, lon)

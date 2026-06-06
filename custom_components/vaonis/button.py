@@ -12,12 +12,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from pyvaonis import VaonisClient
-from pyvaonis import VaonisError
-
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis import VaonisClient
+from .pyvaonis import VaonisError
 
 
 @dataclass(frozen=True, kw_only=True)

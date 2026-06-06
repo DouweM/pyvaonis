@@ -33,7 +33,7 @@ class VaonisEntity(CoordinatorEntity[VaonisCoordinator]):
     @property
     def device_info(self) -> DeviceInfo:
         """Describe the telescope as a single HA device (model resolved from status)."""
-        from pyvaonis import model_display_name
+        from .pyvaonis import model_display_name
 
         status = self.coordinator.data
         model = model_display_name(status.model if status else None)

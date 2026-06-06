@@ -21,12 +21,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from pyvaonis import VaonisClient
-from pyvaonis import VaonisError
-from pyvaonis import VaonisStatus
-
 from .const import CONF_HOST
 from .const import DOMAIN
+from .pyvaonis import VaonisClient
+from .pyvaonis import VaonisError
+from .pyvaonis import VaonisStatus
 
 _LOGGER = logging.getLogger(__name__)
 

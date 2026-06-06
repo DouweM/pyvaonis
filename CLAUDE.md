@@ -7,8 +7,11 @@ Reverse-engineered local API client + CLI + Home Assistant integration for **Vao
 ## Status: WORKING against real hardware ✅
 Validated end-to-end on **firmware 2.35.7** (scope id `stellina-f8bd80`, owner DouweM, Mexico City):
 EIO3 socket + `STATUS_UPDATED`, Ed25519 auth (`app/status` → 200), take-control, live stacked-image
-fetch (real M104 JPEG), `observing`, FTP. Repo is **private**: `github.com/DouweM/pyvaonis`, CI green
-(lint/typecheck/test/hassfest). Push to `main` directly (personal repo).
+fetch (real M104 JPEG), `observing`, FTP. Repo: `github.com/DouweM/pyvaonis` (**public**, so HACS can
+install it as a custom repo without a PyPI release), CI green (lint/typecheck/test/hassfest). Push to
+`main` directly (personal repo). The `pyvaonis` library is **bundled inside the integration** at
+`custom_components/vaonis/pyvaonis/` (no PyPI dependency); `manifest.json` requirements are just
+`pynacl`+`ephem` (aiohttp/pydantic ship with HA core).
 
 ## Hardware & network facts (firmware 2.35.7)
 - Telescope is **always its own Wi-Fi AP at `10.0.0.1`** (no station mode). Three services:
@@ -42,11 +45,14 @@ Mango.)
 
 ## Repo layout
 ```
-pyvaonis/            const.py auth.py _eio3.py models.py client.py catalog.py astro.py
-                       observation.py plan.py weather.py ftp.py cli.py  data/catalog.json
 custom_components/vaonis/  HACS integration (coordinator/entity/config_flow/sensor/binary_sensor/
                        button/select/camera/media_source/http + manifest/hacs/strings/services.yaml)
-tools/extract_catalog.py     regenerate data/catalog.json from an APK
+custom_components/vaonis/pyvaonis/   the bundled library — ALSO the importable `pyvaonis` package
+                       (single source of truth). const.py auth.py _eio3.py models.py client.py
+                       catalog.py astro.py observation.py plan.py weather.py ftp.py cli.py
+                       data/catalog.json. HA files import it relatively (`from .pyvaonis ...`);
+                       hatch builds it as top-level `pyvaonis` (so the CLI/tests still `import pyvaonis`).
+tools/extract_catalog.py     regenerate custom_components/vaonis/pyvaonis/data/catalog.json from an APK
 tests/                 pytest (auth, catalog, astro, observation, plan, ftp, export, safety,
                        weather, models, eio3)  — 59 tests
 docs/API.md            complete endpoint reference + pyvaonis coverage

@@ -99,10 +99,16 @@ None of this is a substitute for care, but the dangerous surfaces are gated rath
 ## Install
 
 ```bash
-pip install "pyvaonis[cli,astro]"     # library + CLI + planet/Moon ephemerides
+# from this repo (not yet on PyPI):
+pip install "pyvaonis[cli,astro] @ git+https://github.com/DouweM/pyvaonis"
 # development:
 uv sync --extra cli --extra astro
 ```
+
+The library ships *inside* the Home Assistant integration at
+[`custom_components/vaonis/pyvaonis`](custom_components/vaonis/pyvaonis) — that single copy is both the
+importable `pyvaonis` package (hatch builds it as top-level) and what HACS installs from this repo, so
+no separate PyPI release is needed.
 
 Extras: `cli` (Typer/Rich), `astro` (`ephem`, for solar-system targets). The core (control,
 deep-sky catalog, darkness, images, export, FTP) needs neither.
@@ -337,9 +343,9 @@ controller at a time, so an action fails with a clear message if the phone curre
 release it there first.)
 
 **Install (HACS):** add this repo as a custom repository (category *Integration*), install, restart,
-then add the *Stellina* integration and set the host (default `10.0.0.1`). The integration's
-`manifest.json` requires `pyvaonis[astro]` from PyPI — publish it (CI does this on a `v*` tag) or
-`pip install` it into the HA venv for local dev.
+then add the *Vaonis* integration and set the host (default `10.0.0.1`). No PyPI release is needed —
+the `pyvaonis` library is bundled in the integration folder; the only external `requirements` HA
+installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 
 **Entities & services** (device shows model + firmware version):
 - Sensors: **Status** — a one-line human summary in the app's own wording ("M104: 180 stacked
@@ -442,26 +448,26 @@ a dual-band GL-SFT1200 "Opal" ~$40 / GL-A1300 "Slate Plus" ~$70 avoids it); keep
 ## Project layout
 
 ```
-pyvaonis/                 # the library (flat layout)
-  const.py                  # IP, ports, endpoints, URL helpers
-  auth.py                   # Ed25519 challenge → Authorization header (embedded keys)
-  models.py                 # VaonisStatus, ObservationBody, AutoInitBody
-  client.py                 # VaonisClient: socket.io + REST + images + export + ftp
-  catalog.py                # bundled catalog, get_object, visible_now
-  astro.py                  # sun position, is_dark, observing_window, ephemerides
-  observation.py            # ObservationProgress, LiveImage, recent_images
-  plan.py                   # native Plan-My-Night: build_plan + PlanProgress
-  weather.py                # cloud forecast (Open-Meteo) + Moon -> night verdict
-  ftp.py                    # saved-library browse/download
-  _eio3.py                  # minimal Engine.IO v3 / Socket.IO v2 websocket client
-  cli.py                    # Typer CLI (entry point `stellina`)
-  data/catalog.json         # bundled object catalog (regenerate via tools/)
-custom_components/vaonis/ # HACS integration wrapping pyvaonis
+custom_components/vaonis/   # HACS integration
   __init__.py coordinator.py entity.py config_flow.py
   sensor.py binary_sensor.py button.py select.py camera.py
   media_source.py http.py   # media browser + proxy view
   manifest.json hacs.json strings.json services.yaml const.py
-tools/extract_catalog.py    # regenerate data/catalog.json from an APK
+  pyvaonis/                 # the bundled library (also the importable `pyvaonis` package)
+    const.py                # IP, ports, endpoints, URL helpers
+    auth.py                 # Ed25519 challenge → Authorization header (embedded keys)
+    models.py               # VaonisStatus, ObservationBody, AutoInitBody
+    client.py               # VaonisClient: socket.io + REST + images + export + ftp
+    catalog.py              # bundled catalog, get_object, visible_now
+    astro.py                # sun position, is_dark, observing_window, ephemerides
+    observation.py          # ObservationProgress, LiveImage, recent_images
+    plan.py                 # native Plan-My-Night: build_plan + PlanProgress
+    weather.py              # cloud forecast (Open-Meteo) + Moon -> night verdict
+    ftp.py                  # saved-library browse/download
+    _eio3.py                # minimal Engine.IO v3 / Socket.IO v2 websocket client
+    cli.py                  # Typer CLI (entry point `vaonis`)
+    data/catalog.json       # bundled object catalog (regenerate via tools/)
+tools/extract_catalog.py    # regenerate the catalog.json above from an APK
 tests/                      # pytest (auth, catalog, astro, observation, plan, ftp, export, models)
 PROTOCOL.md                 # reverse-engineered wire protocol
 ```

@@ -6,6 +6,6 @@
   "documentation": "https://github.com/DouweM/pyvaonis",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/DouweM/pyvaonis/issues",
-  "requirements": ["pyvaonis[astro]==0.1.0"],
+  "requirements": ["pynacl>=1.5", "ephem>=4.1"],
   "version": "0.1.0"
 }

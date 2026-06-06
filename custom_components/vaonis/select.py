@@ -15,13 +15,12 @@ from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from pyvaonis import VaonisError
-from pyvaonis import visibility_rating
-from pyvaonis import visible_now
-
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis import VaonisError
+from .pyvaonis import visibility_rating
+from .pyvaonis import visible_now
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
