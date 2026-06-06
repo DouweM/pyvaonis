@@ -64,7 +64,7 @@
       "restart_autofocus": { "name": "Restart autofocus" }
     },
     "select": {
-      "target": { "name": "Tonight's target" },
+      "target": { "name": "Target" },
       "balens_level": { "name": "BalENS level" },
       "button_brightness": { "name": "Button brightness" }
     },

@@ -21,9 +21,28 @@ from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
 from .pyvaonis import VaonisError
+from .pyvaonis import get_object
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_now
 from .pyvaonis.const import model_supports
+
+
+def _target_label(obj: Any) -> str:
+    """A richer dropdown label for a target — name + static details (type, magnitude, time).
+
+    Only stable fields go in the label (live altitude/visibility would churn the option set and
+    break the current selection); those stay in the ``suggestions`` attribute for a dashboard card.
+    """
+    bits: list[str] = []
+    category = obj.category_label or obj.category
+    if category and category.lower() not in obj.display_name.lower():
+        bits.append(category)
+    if obj.magnitude is not None:
+        bits.append(f"mag {obj.magnitude:.1f}")
+    if obj.duration:
+        bits.append(f"{obj.duration} min")
+    return f"{obj.display_name} · {' · '.join(bits)}" if bits else obj.display_name
+
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
@@ -135,7 +154,7 @@ class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):
 
 
 class VaonisTargetSelect(VaonisEntity, SelectEntity):
-    """Choose tonight's observation target."""
+    """Choose an observation target (curated, currently-up deep-sky objects + planets/Moon)."""
 
     _attr_translation_key = "target"
     _attr_icon = "mdi:star-shooting"
@@ -146,12 +165,14 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._hass = hass
         self._attr_current_option = None
         self._attr_options = []
+        self._target_by_label: dict[str, str] = {}  # rich option label -> catalog target name
         self._suggestions: list[dict[str, Any]] = []
         self._refresh_options()
 
     def _refresh_options(self) -> None:
         # Offer targets day or night (so it's selectable any time); the Observe button still won't
-        # start until it's actually dark. Lists deep-sky objects currently above the horizon.
+        # start until it's actually dark. Lists curated (grade>=5) deep-sky objects currently above the
+        # horizon, plus planets/the Moon (which sort to the top by grade), best first.
         visible = visible_now(
             self._hass.config.latitude,
             self._hass.config.longitude,
@@ -160,13 +181,18 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
             limit=MAX_OPTIONS,
             require_dark=False,
         )
-        self._attr_options = [v.obj.display_name for v in visible]
+        self._target_by_label = {_target_label(v.obj): v.obj.display_name for v in visible}
+        self._attr_options = list(self._target_by_label)
         # Keep the current pick selectable even if it briefly drops below the altitude cut-off, so
-        # the chosen target (and the Observe button that reads it) stays valid.
+        # the chosen target (and the Observe button that reads it) stays valid. Match by target name.
         chosen = self.coordinator.selected_target
-        if chosen and chosen not in self._attr_options:
-            self._attr_options.append(chosen)
-        self._attr_current_option = chosen
+        current = next((lbl for lbl, t in self._target_by_label.items() if t == chosen), None)
+        if chosen and current is None:
+            obj = get_object(chosen)
+            current = _target_label(obj) if obj else chosen
+            self._target_by_label[current] = chosen
+            self._attr_options.append(current)
+        self._attr_current_option = current
         self._suggestions = [
             {
                 "name": v.obj.display_name,
@@ -198,7 +224,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Choose the target (no telescope movement) — the Observe button starts it."""
-        self.coordinator.selected_target = option
+        self.coordinator.selected_target = self._target_by_label.get(option, option)
         self._attr_current_option = option
         self.async_write_ha_state()
 

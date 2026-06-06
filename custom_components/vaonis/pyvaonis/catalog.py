@@ -334,7 +334,9 @@ def visible_now(
     results: list[VisibleObject] = []
     for obj in load_catalog():
         if obj.is_solar:
-            if not include_solar:
+            # Never offer the Sun as a normal target (it needs the solar filter + sun mode); it would
+            # otherwise show up in daylight since solar bodies bypass the grade filter.
+            if not include_solar or obj.id.lower() == "sun":
                 continue
             try:
                 alt = obj.altitude(latitude, longitude, when)

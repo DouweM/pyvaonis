@@ -140,9 +140,12 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   `autoinit`/`run_plan`
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
-  **Two-step observe**: the Tonight's-target select only *picks* (stores `coordinator.selected_target`,
-  no slew; selectable day/night, `require_dark=False`); the **Observe** button starts it (browse-then-
-  Observe like the app) and is gated on `is_dark` (Sun ≤ −10°) so you can't start in daylight (Resume too). **Initialize** button
+  **Two-step observe**: the **Target** select only *picks* (stores `coordinator.selected_target` = the
+  catalog name, no slew; selectable day/night, `require_dark=False`); options are rich labels
+  (`_target_label`: name · type · mag · minutes — STATIC fields only, since live altitude would churn
+  the option set / break the current selection; altitude/visibility live in the `suggestions` attr),
+  mapped back to the target name via `_target_by_label`. The **Observe** button starts it and is gated
+  on `is_dark` (Sun ≤ −10°) so you can't start in daylight (Resume too). `visible_now` excludes the Sun. **Initialize** button
   = one-tap auto-init. **Advanced observation is UI-native**: `switch.mosaic`/`switch.multi_night`
   (local CONFIG toggles, RestoreEntity → `coordinator.mosaic_enabled`/`multi_night_enabled`) +
   `number.mosaic_width`/`mosaic_height` (°, RestoreNumber → coordinator); the Observe button reads
