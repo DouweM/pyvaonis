@@ -35,6 +35,16 @@ def test_normalize_balens_level() -> None:
         normalize_balens_level("bogus")
 
 
+def test_model_supports_hdr_background() -> None:
+    from pyvaonis.const import model_supports
+
+    assert model_supports("vesperapro", "HDR_BACKGROUND") is True
+    assert model_supports("vesperapro2", "DARKS") is True
+    assert model_supports("stellina", "HDR_BACKGROUND") is False  # Stellina has no BalENS
+    assert model_supports("stellina", "FULL_RESOLUTION") is True
+    assert model_supports("some-future-model", "HDR_BACKGROUND") is True  # unknown -> permissive
+
+
 def test_file_http_url_maps_system_to_files() -> None:
     assert (
         file_http_url("10.0.0.1", "/system/captures/run/images/IMG_0001.jpg")

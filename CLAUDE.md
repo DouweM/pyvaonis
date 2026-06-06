@@ -157,7 +157,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   `band`/`filter` sensors are ENUM (device_class) with `state` translations so they read "2.4 GHz" /
   "No filter" not raw enums. **BalENS** = the app's HDR-background processing (`enableHdrBackground` +
   `algoHdrBackground` level RECOMMENDED/SOFT/HARD/OLD; OLD = "First Edition"); switch/select/CLI
-  (`balens-level`) all route through `coordinator.run_action` (settings need control — HA is read-only). The Connectivity
+  (`balens-level`) all route through `coordinator.run_action` (settings need control — HA is read-only).
+  **BalENS is `HDR_BACKGROUND` = Vespera-Pro/Pro2 ONLY** (per `InstrumentModelKt`; Stellina/Vespera lack
+  it) — the switch + level select are **model-gated** via `const.model_supports(model, "HDR_BACKGROUND")`
+  and don't appear on a Stellina. Same gating pattern would apply to DARKS (also Vespera-Pro-only). The Connectivity
   binary_sensor is `always_available` (reports **off** when the scope is unreachable instead of going
   Unavailable like everything else). Coordinator has a 30s watchdog `update_interval` that reconnects
   after the scope is powered back on (cheap no-op while connected) — so entities recover without a reload.

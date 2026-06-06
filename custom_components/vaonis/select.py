@@ -23,6 +23,7 @@ from .entity import VaonisEntity
 from .pyvaonis import VaonisError
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_now
+from .pyvaonis.const import model_supports
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
@@ -43,10 +44,13 @@ async def async_setup_entry(
     entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the target select and the BalENS-level select."""
-    async_add_entities(
-        [VaonisTargetSelect(entry.runtime_data, hass), VaonisBalensLevelSelect(entry.runtime_data)]
-    )
+    """Set up the target select (+ BalENS level where the model supports HDR background)."""
+    coordinator = entry.runtime_data
+    selects: list[SelectEntity] = [VaonisTargetSelect(coordinator, hass)]
+    model = coordinator.data.model if coordinator.data else None
+    if model_supports(model, "HDR_BACKGROUND"):  # BalENS is Vespera-Pro-only
+        selects.append(VaonisBalensLevelSelect(coordinator))
+    async_add_entities(selects)
 
 
 class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):

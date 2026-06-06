@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis.const import model_supports
 
 
 async def async_setup_entry(
@@ -21,11 +22,15 @@ async def async_setup_entry(
     entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Multi-Light switch and the Mosaic / Multi-night observe toggles."""
+    """Set up the Mosaic / Multi-night observe toggles (+ BalENS where the model supports it)."""
     coordinator = entry.runtime_data
-    async_add_entities(
+    model = coordinator.data.model if coordinator.data else None
+    entities: list[SwitchEntity] = []
+    # BalENS (HDR background) is Vespera-Pro-only — don't surface it on models without it (e.g. Stellina).
+    if model_supports(model, "HDR_BACKGROUND"):
+        entities.append(VaonisMultiLightSwitch(coordinator))
+    entities.extend(
         [
-            VaonisMultiLightSwitch(coordinator),
             # Local toggles the Observe button reads (Advanced observation): mosaic + multi-night.
             VaonisOptionSwitch(
                 coordinator,
@@ -39,6 +44,7 @@ async def async_setup_entry(
             VaonisMultiNightSwitch(coordinator),
         ]
     )
+    async_add_entities(entities)
 
 
 class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):

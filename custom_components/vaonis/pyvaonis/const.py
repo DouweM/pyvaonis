@@ -140,6 +140,33 @@ MSG_SET_SYSTEM_TIME: Final = "setSystemTime"
 BAND_2_4_GHZ: Final = "BAND_2_4_GHZ"
 BAND_5_GHZ: Final = "BAND_5_GHZ"
 
+# Per-model instrument settings (mirrors InstrumentModelKt / InstrumentModel.manageSetting): which
+# optional features each model exposes. Notably HDR_BACKGROUND (BalENS) and DARKS are Vespera-Pro-only.
+_STELLINA_SETTINGS: Final = frozenset({"LIVE_FOCUS", "FULL_RESOLUTION"})
+_VESPERA_SETTINGS: Final = frozenset({"LIVE_FOCUS", "WIFI_5GHZ", "DITHERING", "BTN_BRIGHTNESS"})
+_VESPERA_PRO_SETTINGS: Final = frozenset(
+    {"LIVE_FOCUS", "HDR_BACKGROUND", "WIFI_5GHZ", "DARKS", "BTN_BRIGHTNESS"}
+)
+MODEL_SETTINGS: Final = {
+    "stellina": _STELLINA_SETTINGS,
+    "vespera": _VESPERA_SETTINGS,
+    "vespera1ed": _VESPERA_SETTINGS,
+    "vespera2": _VESPERA_SETTINGS,
+    "vespera3": _VESPERA_SETTINGS,
+    "vesperapro": _VESPERA_PRO_SETTINGS,
+    "vesperapro2": _VESPERA_PRO_SETTINGS,
+}
+
+
+def model_supports(model: str | None, setting: str) -> bool:
+    """Whether a model exposes an instrument ``setting`` (e.g. ``HDR_BACKGROUND``, ``DARKS``).
+
+    Unknown/future models default to True so we don't hide a feature we simply can't classify yet.
+    """
+    settings = MODEL_SETTINGS.get((model or "").lower())
+    return setting in settings if settings is not None else True
+
+
 # BalENS (HDR background) processing levels — `settings.algoHdrBackground` (StellinaSettings.BalensMode).
 # OLD is the app's "First Edition". RECOMMENDED/SOFT/HARD/OLD are the wire values.
 BALENS_LEVELS: Final = ("RECOMMENDED", "SOFT", "HARD", "OLD")
