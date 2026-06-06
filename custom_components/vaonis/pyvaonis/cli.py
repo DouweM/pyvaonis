@@ -155,6 +155,37 @@ def status(ip: str = DEFAULT_IP) -> None:
 
 
 @app.command(rich_help_panel=PANEL_DEBUG)
+def reports(ip: str = DEFAULT_IP) -> None:
+    """List the telescope's per-operation telemetry reports (read-only diagnostics)."""
+
+    def _go(s: VaonisClient) -> Any:
+        return s.available_reports()
+
+    _print(_run(_with_client(ip, False, _go)))
+
+
+@app.command(rich_help_panel=PANEL_DEBUG)
+def logs(
+    out: str = typer.Option("", "--out", help="write the logs to this file instead of stdout"),
+    ip: str = DEFAULT_IP,
+) -> None:
+    """Fetch the telescope's diagnostic logs. [Drains the device log buffer — 'consume'.]"""
+
+    def _go(s: VaonisClient) -> Any:
+        return s.consume_logs()
+
+    resp = _run(_with_client(ip, False, _go))
+    data = (resp.get("result") or {}).get("data") if isinstance(resp, dict) else None
+    text = data if isinstance(data, str) else json.dumps(resp, indent=2, default=str)
+    if out:
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        typer.echo(f"wrote logs to {out}")
+    else:
+        typer.echo(text)
+
+
+@app.command(rich_help_panel=PANEL_DEBUG)
 def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
     """Stream raw socket events (use to confirm event names / payloads)."""
 

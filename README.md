@@ -406,6 +406,9 @@ saved capture by `store_id`.)
   telescope's own last-known position, falling back to Home Assistant's configured home location.
   The **Multi-night captures** sensor lists saved captures (count + `store_id`s) so you can pick one
   to resume.
+- Diagnostics: the integration supports HA's **Download diagnostics** (status + the telescope's
+  per-operation telemetry reports, with location/identifiers redacted). From the CLI: `vaonis reports`
+  (telemetry history) and `vaonis logs` (device logs; note this *drains* the device log buffer).
 
 Observation-, plan- and init-specific sensors (target, step, frames, gain/exposure, plan state, …)
 report **Unavailable** when the scope is idle rather than a misleading "Unknown" — they come back the

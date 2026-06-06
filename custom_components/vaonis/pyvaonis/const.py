@@ -102,6 +102,9 @@ class Endpoint:
     STOP_GENERATE_DARK: Final = "darkManager/stopGenerateDark"
     START_PLAN: Final = "planner/startPlan"
     STOP_PLAN: Final = "planner/stopPlan"
+    # Diagnostics.
+    CONSUME_LOGS: Final = "logs/consume"  # POST; returns device logs (and drains the buffer)
+    GET_REPORTS: Final = "reporter/getAvailableReports"  # GET; per-operation telemetry (read-only)
 
 
 # Inbound socket.io event names (from decompiled StellinaSocketV2.connect, recovered via smali).

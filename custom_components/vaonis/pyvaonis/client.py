@@ -429,6 +429,25 @@ class VaonisClient:
         """GET ``app/status``."""
         return await self.get(const.Endpoint.APP_STATUS)
 
+    # -- diagnostics --------------------------------------------------------------------
+    async def consume_logs(self) -> dict[str, Any]:
+        """Fetch the telescope's diagnostic logs (``logs/consume``).
+
+        Note: "consume" — the device returns the buffered logs and clears them, so each call drains
+        what's there. Returns the parsed response (log text under ``result.data``).
+        """
+        return await self.post(const.Endpoint.CONSUME_LOGS)
+
+    async def available_reports(self) -> list[dict[str, Any]]:
+        """Per-operation telemetry reports (``reporter/getAvailableReports``) — read-only.
+
+        Each report is a snapshot (telescope id, time, boot count, firmware, position, the operation
+        and whether it ended). Useful as a lightweight "what has this scope been doing" history.
+        """
+        resp = await self.get(const.Endpoint.GET_REPORTS)
+        result = resp.get("result")
+        return [r for r in result if isinstance(r, dict)] if isinstance(result, list) else []
+
     async def start_autoinit(
         self, latitude: float, longitude: float, *, skip_auto_focus: bool = False
     ) -> dict[str, Any]:
