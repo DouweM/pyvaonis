@@ -125,7 +125,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Stellina buttons."""
     coordinator = entry.runtime_data
-    async_add_entities(VaonisButton(coordinator, description) for description in BUTTONS)
+    entities: list[ButtonEntity] = [VaonisButton(coordinator, d) for d in BUTTONS]
+    entities.append(VaonisInitializeButton(coordinator))
+    async_add_entities(entities)
 
 
 class VaonisButton(VaonisEntity, ButtonEntity):
@@ -162,3 +164,36 @@ class VaonisButton(VaonisEntity, ButtonEntity):
             return False
         available_fn = self.entity_description.available_fn
         return available_fn is None or available_fn(self.coordinator)
+
+
+class VaonisInitializeButton(VaonisEntity, ButtonEntity):
+    """Initialise/align the telescope (plate-solve + autofocus) — the core "Initialize" action.
+
+    Its own class because it resolves a location: the telescope's last-known position, then Home
+    Assistant's configured home (the scope has no GPS, so home covers a first init). Mirrors the
+    ``vaonis.autoinit`` service; available only when idle (the app's ``canStartOperation``).
+    """
+
+    _attr_translation_key = "initialize"
+    _attr_icon = "mdi:crosshairs-gps"
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the button."""
+        super().__init__(coordinator, "initialize")
+
+    async def async_press(self) -> None:
+        """Take control and run auto-init at the resolved location."""
+        scope = self.coordinator.client.location()
+        lat = scope[0] if scope else self.hass.config.latitude
+        lon = scope[1] if scope else self.hass.config.longitude
+        try:
+            await self.coordinator.run_action(lambda c: c.start_autoinit(lat, lon))
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    @property
+    def available(self) -> bool:
+        """Available only when idle (no operation running)."""
+        return (
+            super().available and bool(self.coordinator.data) and not self.coordinator.data.is_busy
+        )

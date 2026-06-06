@@ -358,10 +358,11 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   **controlling device**.
 - Binary sensors: connected, initialised, has control, **dark enough to observe** (with
   `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**.
-- Buttons: take control, **release control**, park, stop, **restart autofocus**, **enable
-  multi-night**, shut down. Each is **disabled when it doesn't apply** (release control only when HA
-  holds control, take control only when it doesn't, stop/restart-autofocus/enable-multi-night only
-  while observing). HA identifies itself to the telescope as **"Home Assistant"** (shown in the
+- Buttons: **initialize** (one-tap auto-init/align — the start of the flow), take control, **release
+  control**, park, stop, **restart autofocus**, **enable multi-night**, shut down. Each is **disabled
+  when it doesn't apply**, mirroring the app's own gates (take control only when nobody holds it,
+  release only when HA does, initialize/park only when idle, stop/restart-autofocus/enable-multi-night
+  only while observing). HA identifies itself to the telescope as **"Home Assistant"** (shown in the
   Singularity app's connected-devices list and the *Controlling device* sensor).
 - Switch: **Multi-Light (HDR)** (CovalENS).
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting starts
@@ -372,8 +373,9 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   never blank.
 - Media source: **Vaonis** in the HA media browser — *Recent captures* (newest run, live frame on top)
   and *Saved library* (FTP `/system/captures`), streamed through HA via a proxy view.
-- Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (initialise/
-  align), **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**
+- Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
+  button's scriptable form — adds explicit `latitude`/`longitude` and `skip_autofocus`),
+  **`vaonis.adjust_framing`** (Change Framing) and **`vaonis.set_camera_params`**
   (live gain/exposure/saturation, both safe mid-observation), **`vaonis.run_plan`** /
   **`vaonis.stop_plan`** (start/cancel the native autonomous plan), **`vaonis.export_capture`**
   (save a full-res image to the HA media dir). `autoinit`/`run_plan` default their location to the

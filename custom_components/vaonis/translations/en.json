@@ -52,6 +52,7 @@
       "update_available": { "name": "Firmware update available" }
     },
     "button": {
+      "initialize": { "name": "Initialize" },
       "take_control": { "name": "Take control" },
       "park": { "name": "Park" },
       "stop": { "name": "Stop observation" },

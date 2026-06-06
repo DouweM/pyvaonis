@@ -32,10 +32,10 @@ BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
         value_fn=lambda c: c.client.connected,
     ),
     VaonisBinaryDescription(
+        # Primary (not diagnostic): being initialised/aligned gates the whole observing flow.
         key="initialized",
         translation_key="initialized",
         icon="mdi:crosshairs-gps",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.data.initialized if c.data else None,
     ),
     VaonisBinaryDescription(
