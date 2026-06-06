@@ -88,13 +88,23 @@ class VaonisMediaSource(MediaSource):
             )
 
         if parts[1] == "recent":
-            # static_url (the written file), not the slow on-demand render
-            children = [
-                self._image(
-                    f"{entry.entry_id}|http|{_b64(img.static_url(client.ip))}", f"#{img.index}"
+            # The newest finished run's frames from the FTP gallery (so it's useful while idle),
+            # with the live frame on top when an observation is running. Newest frames first, capped.
+            children = []
+            if client.current_observation() is not None and (cur := client.current_image()):
+                children.append(
+                    self._image(f"{entry.entry_id}|http|{_b64(cur.static_url(client.ip))}", "live")
                 )
-                for img in client.recent_images()
-            ]
+            caps = [e for e in await client.library(FTP_ROOT) if e.is_dir]
+            if caps:
+                newest = max(caps, key=lambda e: e.name)  # storeId is date-prefixed
+                frames = [
+                    e
+                    for e in await client.library(f"{newest.path}/images")
+                    if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
+                ]
+                for fe in sorted(frames, key=lambda e: e.name, reverse=True)[:60]:
+                    children.append(self._image(f"{entry.entry_id}|ftp|{_b64(fe.path)}", fe.name))
             return self._folder(item.identifier, "Recent captures", children)
 
         if parts[1] == "lib":
