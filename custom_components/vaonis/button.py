@@ -52,15 +52,6 @@ def _is_parked(c: VaonisCoordinator) -> bool:
     return bool(alt.get("atStop")) or alt.get("calibrated") is False
 
 
-def _can_resume(c: VaonisCoordinator) -> bool:
-    """The app's ``canBeResumable``: observing, has ≥1 stacked frame, not already resumable."""
-    obs = c.client.current_observation()
-    if obs is None or not obs.stacking_count:
-        return False
-    op = (c.data.raw.get("currentOperation") if c.data else {}) or {}
-    return (op.get("store") or {}).get("state", "NON_RESUMABLE") == "NON_RESUMABLE"
-
-
 BUTTONS: tuple[VaonisButtonDescription, ...] = (
     VaonisButtonDescription(
         key="take_control",
@@ -108,13 +99,7 @@ BUTTONS: tuple[VaonisButtonDescription, ...] = (
         press_fn=lambda client: client.restart_autofocus(),
         available_fn=_observing,
     ),
-    VaonisButtonDescription(
-        key="enable_multi_night",
-        translation_key="enable_multi_night",
-        icon="mdi:weather-night",
-        press_fn=lambda client: client.enable_multi_night(),
-        available_fn=_can_resume,
-    ),
+    # (multi-night is the "Multi-night mode" switch — it applies to the running capture too.)
 )
 
 

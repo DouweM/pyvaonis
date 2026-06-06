@@ -61,8 +61,7 @@
       "stop": { "name": "Stop observation" },
       "shutdown": { "name": "Shut down" },
       "release_control": { "name": "Release control" },
-      "restart_autofocus": { "name": "Restart autofocus" },
-      "enable_multi_night": { "name": "Enable multi-night" }
+      "restart_autofocus": { "name": "Restart autofocus" }
     },
     "select": {
       "target": { "name": "Tonight's target" },

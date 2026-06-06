@@ -34,13 +34,7 @@ async def async_setup_entry(
                 lambda c: c.mosaic_enabled,
                 lambda c, v: setattr(c, "mosaic_enabled", v),
             ),
-            VaonisOptionSwitch(
-                coordinator,
-                "multi_night",
-                "mdi:weather-night",
-                lambda c: c.multi_night_enabled,
-                lambda c, v: setattr(c, "multi_night_enabled", v),
-            ),
+            VaonisMultiNightSwitch(coordinator),
         ]
     )
 
@@ -124,4 +118,51 @@ class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable the option."""
         self._set(self.coordinator, False)
+        self.async_write_ha_state()
+
+
+class VaonisMultiNightSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
+    """Multi-night: save the capture so it can be resumed on later nights.
+
+    One control for both timings: while idle it's the choice the Observe button applies at start
+    (``store.state``); turning it on *during* an observation also marks the running capture resumable
+    (``setToBeResumable``) right away. (Turning it off can't un-mark a running capture — there's no
+    such command — it only affects the next observation.)
+    """
+
+    _attr_translation_key = "multi_night"
+    _attr_icon = "mdi:weather-night"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the multi-night switch."""
+        super().__init__(coordinator, "multi_night")
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last choice into the coordinator."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_state()) is not None:
+            self.coordinator.multi_night_enabled = last.state == "on"
+
+    @property
+    def is_on(self) -> bool:
+        """On if the running capture is already resumable, else the next-observation choice."""
+        if self.coordinator.client.current_observation() is not None:
+            op = (
+                self.coordinator.data.raw.get("currentOperation") if self.coordinator.data else {}
+            ) or {}
+            if (op.get("store") or {}).get("state") == "TO_BE_RESUMABLE":
+                return True
+        return self.coordinator.multi_night_enabled
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable multi-night; if observing, mark the running capture resumable now."""
+        self.coordinator.multi_night_enabled = True
+        self.async_write_ha_state()
+        if self.coordinator.client.current_observation() is not None:
+            await self.coordinator.run_action(lambda c: c.enable_multi_night())
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Clear the choice for the next observation (a running capture stays as-is)."""
+        self.coordinator.multi_night_enabled = False
         self.async_write_ha_state()
