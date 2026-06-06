@@ -205,7 +205,7 @@ def watch(ip: str = DEFAULT_IP, seconds: int = 60) -> None:
 
 @app.command(rich_help_panel=PANEL_CONTROL)
 def park(ip: str = DEFAULT_IP) -> None:
-    """Park the telescope. [IDLE ONLY — stop any observation first.]"""
+    """Close the arm / park the telescope (the app's "Close the arm"). [IDLE ONLY.]"""
     _print(_run(_with_client(ip, True, lambda s: s.park())))
 
 
@@ -250,10 +250,10 @@ def multi_light(
     on: bool = typer.Option(..., "--on/--off", help="enable/disable Multi-Light (HDR)"),
     ip: str = DEFAULT_IP,
 ) -> None:
-    """Multi-Light: toggle the CovalENS HDR-background image mode (a setting; firmware >= 2.28).
+    """BalENS: toggle the app's HDR-background processing (a setting; firmware >= 2.28).
 
     [SAFE DURING OBSERVATION] Distinct from `multi-night` despite the similar name: this changes
-    HOW frames are processed (HDR), not whether the stack is kept across nights.
+    HOW frames are processed (HDR background extraction), not whether the stack is kept across nights.
     """
     _print(_run(_with_client(ip, True, lambda s: s.set_multi_light(on))))
 

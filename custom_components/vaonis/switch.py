@@ -46,7 +46,7 @@ async def async_setup_entry(
 
 
 class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
-    """Multi-Light (HDR background / CovalENS) — a persistent device setting."""
+    """BalENS (the app's HDR-background processing) — a persistent device setting."""
 
     _attr_translation_key = "multi_light"
     _attr_icon = "mdi:hdr"
@@ -56,12 +56,21 @@ class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
         super().__init__(coordinator, "multi_light")
 
     @property
-    def is_on(self) -> bool | None:
-        """Read `settings.enableHdrBackground` from the latest status."""
+    def is_on(self) -> bool:
+        """Whether BalENS is on, from `settings.enableHdrBackground` (or the algo mode).
+
+        Always a definite bool: returning None puts the switch in an "unknown" state, which HA renders
+        as two on/off buttons instead of a single toggle.
+        """
         settings = self._status_value("settings")
-        if isinstance(settings, dict):
-            return settings.get("enableHdrBackground")
-        return None
+        if not isinstance(settings, dict):
+            return False
+        enabled = settings.get("enableHdrBackground")
+        if isinstance(enabled, bool):
+            return enabled
+        # Some firmwares report only the algo mode; absent/NONE/OFF means off.
+        algo = settings.get("algoHdrBackground")
+        return bool(algo) and str(algo).upper() not in ("NONE", "OFF")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable Multi-Light."""

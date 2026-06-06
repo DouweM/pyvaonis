@@ -366,7 +366,7 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   initialized + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
   restart-autofocus/enable-multi-night only while observing). HA identifies itself to the telescope as
   **"Home Assistant"** (shown in the Singularity app's connected-devices list and *Controlling device*).
-- Switches: **Multi-Light (HDR)** (CovalENS, a device setting), and two local **Advanced-observation
+- Switches: **BalENS** (the app's HDR-background processing, a device setting), and two local **Advanced-observation
   toggles** the Observe button respects — **Mosaic mode** and **Multi-night mode**.
 - Numbers: **Mosaic width** / **Mosaic height** (degrees) — the field size used when Mosaic mode is on.
 - Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting only
