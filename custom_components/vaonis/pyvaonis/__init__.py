@@ -13,6 +13,7 @@ from .catalog import load_catalog
 from .catalog import observation_object_name
 from .catalog import visibility_rating
 from .catalog import visible_now
+from .catalog import visible_tonight
 from .client import VaonisClient
 from .client import VaonisCommandError
 from .client import VaonisConnectionError
@@ -66,6 +67,7 @@ __all__ = [
     "sun_altitude",
     "visibility_rating",
     "visible_now",
+    "visible_tonight",
 ]
 
 __version__ = "0.1.0"
