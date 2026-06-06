@@ -101,6 +101,28 @@ def _raw(*path: str) -> Any:
     return getter
 
 
+_BAND_LABELS = {"BAND_2_4_GHZ": "2.4 GHz", "BAND_5_GHZ": "5 GHz"}
+# Mirrors the app's instrument_filter_* labels.
+_FILTER_LABELS = {
+    "NONE": "No filter",
+    "DUST": "Lens cap",
+    "SOLAR": "Solar",
+    "CLS": "CLS",
+    "DUAL": "Dual",
+    "IR": "IR",
+}
+
+
+def _band(coordinator: VaonisCoordinator) -> Any:
+    raw = _raw("network", "band")(coordinator)
+    return _BAND_LABELS.get(raw, raw)
+
+
+def _filter(coordinator: VaonisCoordinator) -> Any:
+    raw = _raw("filter")(coordinator)
+    return _FILTER_LABELS.get(raw, raw)
+
+
 def _storage_free_mb(coordinator: VaonisCoordinator) -> Any:
     avail = _raw("storage", "data", "available")(coordinator)
     return round(avail / 1000) if isinstance(avail, int | float) else None
@@ -277,19 +299,15 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         key="band",
         translation_key="band",
         icon="mdi:wifi",
-        device_class=SensorDeviceClass.ENUM,
-        options=["BAND_2_4_GHZ", "BAND_5_GHZ"],
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_raw("network", "band"),
+        value_fn=_band,
     ),
     VaonisSensorDescription(
         key="filter",
         translation_key="filter",
         icon="mdi:filter",
-        device_class=SensorDeviceClass.ENUM,
-        options=["NONE", "DUST", "SOLAR", "CLS", "DUAL", "IR"],
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_raw("filter"),
+        value_fn=_filter,
     ),
     VaonisSensorDescription(
         key="autofocus_temperature",

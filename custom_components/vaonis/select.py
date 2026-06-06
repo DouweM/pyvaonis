@@ -23,11 +23,19 @@ from .entity import VaonisEntity
 from .pyvaonis import VaonisError
 from .pyvaonis import visibility_rating
 from .pyvaonis import visible_now
-from .pyvaonis.const import BALENS_LEVELS
 
 MIN_ALTITUDE = 15.0
 MIN_GRADE = 5.0
 MAX_OPTIONS = 25
+
+# BalENS level: friendly labels are the select options; mapped back to wire values on set
+# (set_balens_level normalises "First Edition" -> OLD, etc.).
+_BALENS_LABELS = {
+    "RECOMMENDED": "Recommended",
+    "SOFT": "Soft",
+    "HARD": "Hard",
+    "OLD": "First Edition",
+}
 
 
 async def async_setup_entry(
@@ -51,14 +59,14 @@ class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):
     def __init__(self, coordinator: VaonisCoordinator) -> None:
         """Initialise the BalENS-level select."""
         super().__init__(coordinator, "balens_level")
-        self._attr_options = list(BALENS_LEVELS)
+        self._attr_options = list(_BALENS_LABELS.values())
 
     @property
     def current_option(self) -> str | None:
-        """The level from `settings.algoHdrBackground`, or None if unknown."""
+        """The level from `settings.algoHdrBackground` as a friendly label, or None if unknown."""
         settings = self._status_value("settings")
         algo = settings.get("algoHdrBackground") if isinstance(settings, dict) else None
-        return algo if algo in self._attr_options else None
+        return _BALENS_LABELS.get(algo)
 
     async def async_select_option(self, option: str) -> None:
         """Set the BalENS level (one-shot: take control, set, release)."""
