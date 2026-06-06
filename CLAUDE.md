@@ -76,13 +76,15 @@ README.md PROTOCOL.md  usage / wire protocol
   `captureStore/*`), **native plan (`start_plan`/`stop_plan`/`plan_progress`)**, full-res export
   (tiff/jxl), FTP library, live image + recent images, catalog + "tonight" visibility, weather verdict
   (Open-Meteo), darkness/observing window, ephemeris (planets/Moon).
-- **Not yet** (full coverage audit done; bodies mapped — see `docs/API.md`): playlist
-  (`playlist/startPlaylist` — RANDOM shuffle), expertMode raw acquisition (`StorageAcquisitionBody`),
-  sun/eclipse mode (`sun/*`, solar-filter-only — keep behind allow_solar), darkManager
-  (`generateDark`/`stopGenerateDark` — constants exist, no helper), logs/consume + reporter
-  (diagnostics), `planner/getPlanObservation`, `general/setUserParams` MAP field,
-  `general/openForMaintenance`, storage browse/delete. Worth-adding priority: darkManager, playlist,
-  setUserParams MAP, getPlanObservation.
+- **Not yet** (full coverage audit done; bodies mapped — see `docs/API.md`): **manual focus**
+  (`setUserParams` `MAP` int = focus *motor position* ~0–206000, the app's "Focus" slider — NOT
+  "multi-accumulation"; universal, useful), playlist (`playlist/startPlaylist` — RANDOM shuffle),
+  **darkManager** (`generateDark`/`stopGenerateDark`, no body — but **Vespera Pro/Pro2 ONLY**, fw
+  ≥2.32; needs lens cap on, ~30min, 3 steps BIAS/DARK/MASTER; "use" is a separate `enableDarkUsage`
+  setting; **not available on Stellina**), `planner/getPlanObservation`, logs/consume + reporter
+  (diagnostics), `general/openForMaintenance`, storage browse/delete, expertMode raw acquisition,
+  sun/eclipse mode (`sun/*`, solar-filter-only — behind allow_solar). Priority: manual focus, playlist,
+  getPlanObservation; darkManager only matters for Vespera Pro owners.
 - **Safety-gated** (never auto-run): firmware upload (blocked), delete/reset (`allow_unsafe`),
   solar/sun-near (`allow_solar`). See `client._guard_endpoint`. Full map in `docs/API.md`.
 
