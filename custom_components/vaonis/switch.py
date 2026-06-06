@@ -33,6 +33,8 @@ async def async_setup_entry(
                 "mdi:grid",
                 lambda c: c.mosaic_enabled,
                 lambda c, v: setattr(c, "mosaic_enabled", v),
+                # Mosaic only applies to a *new* observation (set at start) — disable while busy.
+                available_fn=lambda c: bool(c.data) and not c.data.is_busy,
             ),
             VaonisMultiNightSwitch(coordinator),
         ]
@@ -91,6 +93,7 @@ class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
         icon: str,
         get_fn: Callable[[VaonisCoordinator], bool],
         set_fn: Callable[[VaonisCoordinator, bool], None],
+        available_fn: Callable[[VaonisCoordinator], bool] | None = None,
     ) -> None:
         """Initialise the local option switch."""
         super().__init__(coordinator, key)
@@ -98,6 +101,7 @@ class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
         self._attr_icon = icon
         self._get = get_fn
         self._set = set_fn
+        self._available_fn = available_fn
 
     async def async_added_to_hass(self) -> None:
         """Restore the last on/off choice into the coordinator."""
@@ -109,6 +113,13 @@ class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
     def is_on(self) -> bool:
         """The current choice."""
         return self._get(self.coordinator)
+
+    @property
+    def available(self) -> bool:
+        """Greyed out when the option can't take effect right now."""
+        if not super().available:
+            return False
+        return self._available_fn is None or self._available_fn(self.coordinator)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable the option."""

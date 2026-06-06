@@ -48,6 +48,8 @@ class VaonisEntity(CoordinatorEntity[VaonisCoordinator]):
             model=model,
             name=name,
             sw_version=sw_version,
+            serial_number=status.telescope_id if status and status.telescope_id else None,
+            configuration_url="https://github.com/DouweM/pyvaonis",
         )
 
     def _status_value(self, *path: str) -> Any:

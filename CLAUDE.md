@@ -132,7 +132,12 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   **Latest target** sensor reads `coordinator.latest_target`, which the image entity sets from the
   live obs or the archived storeId (`observation_object_name`). The config entry is titled after the
   telescope's own `telescopeName` (e.g. "Stellina"), set in setup + config_flow. Observation/plan/init
-  sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle. `autoinit`/`run_plan`
+  sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle; settables that can't
+  take effect mid-observation are disabled while busy (Mosaic switch + width/height numbers = start-time
+  geometry), while ones that can stay enabled (Multi-night → setToBeResumable; BalENS = safe setting).
+  Enum sensors are humanised (`operation`/`plan_state` via labels.py; `band`/`filter` via code maps),
+  floats get `suggested_display_precision`, device carries `serial_number`+`configuration_url`.
+  `autoinit`/`run_plan`
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
   **Two-step observe**: the Tonight's-target select only *picks* (stores `coordinator.selected_target`,

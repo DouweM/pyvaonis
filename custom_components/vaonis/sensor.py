@@ -20,6 +20,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis.labels import OPERATION_TYPE_LABELS
+from .pyvaonis.labels import PLAN_STATE_LABELS
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -60,7 +62,8 @@ def _sensors_field(key: str) -> Any:
 def _operation(coordinator: VaonisCoordinator) -> Any:
     op = coordinator.data.raw.get("currentOperation") if coordinator.data else None
     if isinstance(op, dict) and not op.get("stopped"):
-        return op.get("type")
+        kind = op.get("type")
+        return OPERATION_TYPE_LABELS.get(kind, kind)  # friendly label (else the raw enum)
     return None
 
 
@@ -154,7 +157,9 @@ def _frames_acquired(coordinator: VaonisCoordinator) -> Any:
 
 def _plan_state(coordinator: VaonisCoordinator) -> Any:
     plan = coordinator.client.plan_progress()
-    return plan.state if plan else None
+    if plan is None:
+        return None
+    return PLAN_STATE_LABELS.get(plan.state, plan.state)  # friendly label (else the raw enum)
 
 
 def _plan_target(coordinator: VaonisCoordinator) -> Any:
@@ -210,6 +215,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_sensors_field("temperature"),
     ),
@@ -218,6 +224,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_sensors_field("humidity"),
     ),
@@ -227,6 +234,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_sensors_field("dewpointDepression"),
     ),
@@ -315,6 +323,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_raw("autofocusTemperature"),
     ),
@@ -347,6 +356,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         icon="mdi:camera-iris",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_display_precision=1,
         value_fn=_exposure_seconds,
         available_fn=_observing,
     ),
