@@ -17,6 +17,7 @@ from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
 from .pyvaonis import VaonisClient
 from .pyvaonis import VaonisError
+from .pyvaonis import is_dark
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -222,7 +223,7 @@ class VaonisObserveButton(VaonisEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Enabled when idle, initialized, and a target has been chosen."""
+        """Enabled when idle, initialized, dark enough, and a target has been chosen."""
         data = self.coordinator.data
         return (
             super().available
@@ -230,6 +231,7 @@ class VaonisObserveButton(VaonisEntity, ButtonEntity):
             and not data.is_busy
             and bool(data.initialized)
             and bool(self.coordinator.selected_target)
+            and is_dark(self.hass.config.latitude, self.hass.config.longitude)
         )
 
 
@@ -261,7 +263,7 @@ class VaonisResumeButton(VaonisEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Enabled when idle, initialized, and there's a saved capture to resume."""
+        """Enabled when idle, initialized, dark enough, and there's a saved capture to resume."""
         data = self.coordinator.data
         return (
             super().available
@@ -269,4 +271,5 @@ class VaonisResumeButton(VaonisEntity, ButtonEntity):
             and not data.is_busy
             and bool(data.initialized)
             and bool(self.coordinator.client.stored_captures())
+            and is_dark(self.hass.config.latitude, self.hass.config.longitude)
         )

@@ -150,14 +150,15 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        # require_dark=True => no targets offered until it's actually dark (like the app).
+        # Offer targets day or night (so it's selectable any time); the Observe button still won't
+        # start until it's actually dark. Lists deep-sky objects currently above the horizon.
         visible = visible_now(
             self._hass.config.latitude,
             self._hass.config.longitude,
             min_altitude=MIN_ALTITUDE,
             min_grade=MIN_GRADE,
             limit=MAX_OPTIONS,
-            require_dark=True,
+            require_dark=False,
         )
         self._attr_options = [v.obj.display_name for v in visible]
         # Keep the current pick selectable even if it briefly drops below the altitude cut-off, so

@@ -366,10 +366,10 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   initialized + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
   restart-autofocus/enable-multi-night only while observing). HA identifies itself to the telescope as
   **"Home Assistant"** (shown in the Singularity app's connected-devices list and *Controlling device*).
-- Select: **Tonight's target** — dark-gated, grade-ranked, includes planets/Moon; selecting only
-  *picks* the target (no slew) — press **Observe** to start it (browse-then-Observe, like the app).
-  Available only when idle. `suggestions` attribute carries name/altitude/magnitude/constellation/
-  description.
+- Select: **Tonight's target** — grade-ranked, includes planets/Moon; selecting only *picks* the
+  target (no slew) — press **Observe** to start it (browse-then-Observe, like the app). Selectable any
+  time (day or night) while idle; the **Observe** button stays disabled until it's actually dark
+  (Sun ≤ −10°). `suggestions` attribute carries name/altitude/magnitude/constellation/description.
 - Configuration (settings, grouped separately from controls) — **shown per model** (only the ones the
   telescope supports, mirroring the app): device settings **Live focus**, **Full resolution**,
   **Dithering**, **Use master dark**, **BalENS** + **BalENS level**, **Button brightness**; plus the
