@@ -24,7 +24,6 @@ from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
 from .pyvaonis import observation_object_name
-from .pyvaonis.const import file_http_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,16 +108,16 @@ class VaonisImage(VaonisEntity, ImageEntity):
             self._request_refresh()
 
     async def _fetch(self) -> tuple[bytes, datetime | None] | None:
-        """Fetch the live frame if observing, otherwise the newest finished capture.
+        """Fetch the live frame if observing, otherwise the newest finished capture (over FTP).
 
-        Bytes come over HTTP (the ``/files`` static server) rather than FTP — far lighter on the
-        scope and much faster, especially for parallel media-browser thumbnails.
+        FTP is the transport that actually serves saved frames here — the scope's ``/files`` HTTP
+        server only renders the *live* capture, not arbitrary archived files over the bridge.
         """
         client = self.coordinator.client
         img = client.current_image()
         if img is not None:
             try:
-                data = await client.fetch_image(img.static_url(client.ip))
+                data = await client.download_file(img.ftp_path)
                 self._source = "live"
                 obs = client.current_observation()
                 self._target = obs.object_name if obs else None
@@ -130,7 +129,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
         try:
             frame = await client.latest_capture()
             if frame is not None:
-                data = await client.fetch_image(file_http_url(client.ip, frame.path))
+                data = await client.download_file(frame.path)
                 self._source = "archived"
                 segments = frame.path.split("/")
                 store_id = (

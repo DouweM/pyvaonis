@@ -32,7 +32,6 @@ from .http import _mime_for
 # FTP_ROOT = "/system/captures" — where finished runs live (the device's /user is empty)
 from .pyvaonis import observation_object_name
 from .pyvaonis.const import FTP_ROOT
-from .pyvaonis.const import file_http_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -142,14 +141,14 @@ class VaonisMediaSource(MediaSource):
                 )
             children = []
             for fe in frames[:_MAX_FRAMES]:
-                # Fetch bytes over HTTP (the /files static server) — far lighter on the scope than
-                # FTP, which opened a fresh connection per frame and choked on parallel thumbnails.
-                ref = _b64(file_http_url(client.ip, fe.path))
+                # Bytes come over FTP — the scope's /files HTTP server only renders the *live*
+                # capture, not arbitrary archived files. Fetches are pooled + concurrency-capped.
+                ref = _b64(fe.path)
                 children.append(
                     self._image(
-                        f"{entry.entry_id}|http|{ref}",
+                        f"{entry.entry_id}|ftp|{ref}",
                         fe.name,
-                        self._proxy(entry.entry_id, "http", ref),
+                        self._proxy(entry.entry_id, "ftp", ref),
                     )
                 )
             label = _observation_label(store_path.rstrip("/").split("/")[-1])

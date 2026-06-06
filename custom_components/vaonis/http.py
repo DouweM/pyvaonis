@@ -11,6 +11,7 @@ import asyncio
 import base64
 import logging
 import posixpath
+from collections import OrderedDict
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -25,6 +26,10 @@ URL = "/api/vaonis_media/{entry_id}/{kind}/{ref}"
 # The media browser requests every thumbnail at once; cap how many image fetches hit the telescope
 # concurrently so we don't overwhelm its lightweight server / the Wi-Fi bridge.
 _MAX_CONCURRENT_FETCHES = 4
+
+# Saved frames never change, and FTP fetches are slow — cache recently-served bytes so re-rendering
+# thumbnails / re-opening images is instant and doesn't re-hit the scope (bounded LRU by count).
+_CACHE_MAX = 64
 
 _MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".tif": "image/tiff", ".jxl": "image/jxl"}
 
@@ -52,12 +57,21 @@ class VaonisMediaView(HomeAssistantView):
         """Store hass for entry/client lookup."""
         self.hass = hass
         self._semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
+        self._cache: OrderedDict[str, tuple[bytes, str]] = OrderedDict()
 
     async def get(self, request: web.Request, entry_id: str, kind: str, ref: str) -> web.Response:
         """Resolve ``kind`` (``http``|``ftp``) + ``ref`` (b64) and return the image bytes."""
         entry = self.hass.config_entries.async_get_entry(entry_id)
         if entry is None or getattr(entry, "runtime_data", None) is None:
             return web.Response(status=404)
+        if kind not in ("http", "ftp"):
+            return web.Response(status=404)
+
+        cache_key = f"{entry_id}:{kind}:{ref}"
+        if (hit := self._cache.get(cache_key)) is not None:
+            self._cache.move_to_end(cache_key)
+            return web.Response(body=hit[0], content_type=hit[1])
+
         client = entry.runtime_data.client
         try:
             decoded = base64.urlsafe_b64decode(ref.encode()).decode()
@@ -65,12 +79,15 @@ class VaonisMediaView(HomeAssistantView):
                 if kind == "http":
                     data = await client.fetch_image(decoded)
                     content_type = "image/jpeg"
-                elif kind == "ftp":
+                else:
                     data = await client.download_file(decoded)
                     content_type = _mime_for(decoded)
-                else:
-                    return web.Response(status=404)
         except Exception:
             _LOGGER.debug("media proxy failed for %s/%s", kind, ref, exc_info=True)
             return web.Response(status=502)
+
+        self._cache[cache_key] = (data, content_type)
+        self._cache.move_to_end(cache_key)
+        while len(self._cache) > _CACHE_MAX:
+            self._cache.popitem(last=False)
         return web.Response(body=data, content_type=content_type)

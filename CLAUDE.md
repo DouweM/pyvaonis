@@ -107,9 +107,13 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Plan-My-Night (`client.start_plan`/`stop_plan`). Single **image** entity (`VaonisImage`, Platform.
   IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest capture via
   `client.latest_capture()`; `source` (live|archived) + `target` attrs; `image_last_updated` = the
-  frame's real time (live=now, archived=MDTM). **Image bytes are fetched over HTTP** (`file_http_url`,
-  the `/files` static server — light/fast), NOT FTP; FTP is used only to *list*. The media proxy view
-  caps concurrent fetches (`asyncio.Semaphore(4)`) so a wall of thumbnails can't overwhelm the scope.
+  frame's real time (live=now, archived=MDTM). **Image bytes come over FTP** — VERIFIED on hardware
+  that the `/files` HTTP server only renders the *live* capture (a GET of an archived frame hangs);
+  `file_http_url` exists but is unused. FTP is slow (per-call connect+login + a PASV data connection
+  over the bridge, ~seconds each; connection pooling didn't help — the data connection dominates). So
+  the media proxy view **caches** served bytes (LRU 64) and **caps** concurrent fetches
+  (`asyncio.Semaphore(4)`); the image entity fetches in the background + caches. MLSD returns no
+  `modify`, so the real timestamp comes from an explicit **MDTM**.
   **Latest target** sensor reads `coordinator.latest_target`, which the image entity sets from the
   live obs or the archived storeId (`observation_object_name`). The config entry is titled after the
   telescope's own `telescopeName` (e.g. "Stellina"), set in setup + config_flow. Observation/plan/init
