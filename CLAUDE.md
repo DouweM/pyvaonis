@@ -112,9 +112,12 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   that the `/files` HTTP server only renders the *live* capture (a GET of an archived frame hangs);
   `file_http_url` exists but is unused. FTP is slow (per-call connect+login + a PASV data connection
   over the bridge, ~seconds each; connection pooling didn't help — the data connection dominates). So
-  the media proxy view **caches** served bytes (LRU 64) and **caps** concurrent fetches
-  (`asyncio.Semaphore(4)`); the image entity fetches in the background + caches. MLSD returns no
-  `modify`, so the real timestamp comes from an explicit **MDTM**.
+  the media proxy view caches served bytes in **two levels** — in-session memory (LRU 64) + an
+  on-disk cache at `<config>/vaonis_media_cache/` (persists across restarts, pruned to ~1500 files) —
+  and **caps** concurrent fetches (`asyncio.Semaphore(4)`); the image entity fetches in the background
+  + caches. (The Singularity app's gallery is fast because it downloads each frame to the phone
+  *during* capture and shows local copies — there is NO telescope thumbnail endpoint; the disk cache
+  is our lazy equivalent.) MLSD returns no `modify`, so the real timestamp comes from an **MDTM**.
   **Latest target** sensor reads `coordinator.latest_target`, which the image entity sets from the
   live obs or the archived storeId (`observation_object_name`). The config entry is titled after the
   telescope's own `telescopeName` (e.g. "Stellina"), set in setup + config_flow. Observation/plan/init
