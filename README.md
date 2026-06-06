@@ -366,12 +366,15 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   initialized + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
   restart-autofocus/enable-multi-night only while observing). HA identifies itself to the telescope as
   **"Home Assistant"** (shown in the Singularity app's connected-devices list and *Controlling device*).
-- Select: **Target** — the curated, currently-up targets (grade ≥ 5 deep-sky above 15°, plus
-  planets/the Moon; the Sun is never offered), best first. Each option shows **name · type · magnitude
-  · recommended-minutes** (e.g. *"Orion Nebula · Emission nebula · mag 5.0 · 20 min"*). Selecting only
-  *picks* the target (no slew) — press **Observe** to start it (browse-then-Observe, like the app).
-  Selectable any time (day or night) while idle; **Observe** stays disabled until it's dark (Sun ≤
-  −10°). Live altitude/visibility per option is in the `suggestions` attribute (for a dashboard card).
+- Select: **Target** — what's worth imaging **tonight** (peak altitude over tonight's dark window, so
+  it's useful even when picked in daylight), curated (grade ≥ 5 deep-sky above 15° + planets/Moon; the
+  Sun is never offered), best first. Each option bakes in the planning info: **name · ↑peak° at <time>
+  · type · magnitude · recommended-minutes** (e.g. *"Orion Nebula · ↑65° at 23:40 · Emission nebula ·
+  mag 5.0 · 20 min"*) — HA's select shows only the option string, so we use the *peak* (stable through
+  the night) rather than the live altitude (which would churn). Selecting only *picks* the target (no
+  slew) — press **Observe** to start it; selectable day or night while idle, but **Observe** stays
+  disabled until it's dark (Sun ≤ −10°). The `suggestions` attribute carries the full per-target
+  breakdown (peak altitude + time, visibility, up-now, grade, constellation, …) for a custom card.
 - Configuration (settings, grouped separately from controls) — **shown per model** (only the ones the
   telescope supports, mirroring the app): device settings **Live focus**, **Full resolution**,
   **Dithering**, **Use master dark**, **BalENS** + **BalENS level**, **Button brightness**; plus the

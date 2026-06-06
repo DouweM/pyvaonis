@@ -141,9 +141,11 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
   **Two-step observe**: the **Target** select only *picks* (stores `coordinator.selected_target` = the
-  catalog name, no slew; selectable day/night, `require_dark=False`); options are rich labels
-  (`_target_label`: name · type · mag · minutes — STATIC fields only, since live altitude would churn
-  the option set / break the current selection; altitude/visibility live in the `suggestions` attr),
+  catalog name, no slew; selectable day/night, `require_dark=False`); options use `visible_tonight`
+  (peak altitude over tonight's dark window — useful when picked in daylight; recompute throttled to
+  ~10min since it's stable for the night and the select refreshes on every push). Rich labels
+  (`_target_label`: name · ↑peak° at <local time> · type · mag · minutes) — peak is stable so it's safe
+  in the option string (HA's select shows only that string); full breakdown in `suggestions`; labels
   mapped back to the target name via `_target_by_label`. The **Observe** button starts it and is gated
   on `is_dark` (Sun ≤ −10°) so you can't start in daylight (Resume too). `visible_now` excludes the Sun. **Initialize** button
   = one-tap auto-init. **Advanced observation is UI-native**: `switch.mosaic`/`switch.multi_night`

@@ -8,6 +8,7 @@ app's browse-then-Observe flow.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -16,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
@@ -23,17 +25,25 @@ from .entity import VaonisEntity
 from .pyvaonis import VaonisError
 from .pyvaonis import get_object
 from .pyvaonis import visibility_rating
-from .pyvaonis import visible_now
+from .pyvaonis import visible_tonight
 from .pyvaonis.const import model_supports
 
+_REFRESH_TTL = (
+    600.0  # recompute tonight's visibility at most this often (it's stable for the night)
+)
 
-def _target_label(obj: Any) -> str:
-    """A richer dropdown label for a target — name + static details (type, magnitude, time).
 
-    Only stable fields go in the label (live altitude/visibility would churn the option set and
-    break the current selection); those stay in the ``suggestions`` attribute for a dashboard card.
+def _target_label(obj: Any, peak: float | None = None, peak_time: str | None = None) -> str:
+    """Dropdown label: ``name · ↑peak° at time · type · mag · minutes``.
+
+    We bake the key planning info into the option string because HA's select UI shows nothing but
+    that string. Tonight's *peak* altitude is used (not the live instantaneous altitude), so the label
+    is stable through the night and doesn't churn the option set; the full per-target breakdown still
+    lives in the ``suggestions`` attribute for a custom card.
     """
     bits: list[str] = []
+    if peak is not None:
+        bits.append(f"↑{round(peak)}°" + (f" at {peak_time}" if peak_time else ""))
     category = obj.category_label or obj.category
     if category and category.lower() not in obj.display_name.lower():
         bits.append(category)
@@ -167,24 +177,51 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._attr_options = []
         self._target_by_label: dict[str, str] = {}  # rich option label -> catalog target name
         self._suggestions: list[dict[str, Any]] = []
+        self._computed_at = 0.0  # monotonic time of the last (throttled) recompute
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        # Offer targets day or night (so it's selectable any time); the Observe button still won't
-        # start until it's actually dark. Lists curated (grade>=5) deep-sky objects currently above the
-        # horizon, plus planets/the Moon (which sort to the top by grade), best first.
-        visible = visible_now(
+        # What's worth imaging *tonight* — peak altitude over tonight's dark window (not the live
+        # instant), so a target picked in daylight reflects the coming night. Curated (grade>=5)
+        # deep-sky + planets/Moon, best first. Recompute is throttled (it's stable through the night
+        # and would otherwise run on every status push); current_option is kept fresh by select.
+        now = time.monotonic()
+        if self._attr_options and now - self._computed_at < _REFRESH_TTL:
+            return
+        self._computed_at = now
+        visible = visible_tonight(
             self._hass.config.latitude,
             self._hass.config.longitude,
             min_altitude=MIN_ALTITUDE,
             min_grade=MIN_GRADE,
             limit=MAX_OPTIONS,
-            require_dark=False,
         )
-        self._target_by_label = {_target_label(v.obj): v.obj.display_name for v in visible}
+        self._target_by_label = {}
+        self._suggestions = []
+        for v in visible:
+            best = dt_util.as_local(v.peak_time).strftime("%H:%M")
+            label = _target_label(v.obj, peak=v.peak_altitude, peak_time=best)
+            self._target_by_label[label] = v.obj.display_name
+            self._suggestions.append(
+                {
+                    "name": v.obj.display_name,
+                    "peak_altitude": round(v.peak_altitude, 1),
+                    "peak_time": v.peak_time.isoformat(),
+                    "visibility": visibility_rating(v.peak_altitude),  # good/poor (app's colour)
+                    "up_now": v.up_now,
+                    "recommended_minutes": v.obj.duration or None,
+                    "grade": v.obj.grade,
+                    "magnitude": v.obj.magnitude,
+                    "constellation": v.obj.constellation_name or v.obj.constellation,
+                    "category": v.obj.category_label or v.obj.category,
+                    "distance": v.obj.distance_display,
+                    "is_solar": v.obj.is_solar,
+                    "description": v.obj.description,
+                }
+            )
         self._attr_options = list(self._target_by_label)
-        # Keep the current pick selectable even if it briefly drops below the altitude cut-off, so
-        # the chosen target (and the Observe button that reads it) stays valid. Match by target name.
+        # Keep the current pick selectable even if it isn't in tonight's list, so the chosen target
+        # (and the Observe button that reads it) stays valid. Match by target name.
         chosen = self.coordinator.selected_target
         current = next((lbl for lbl, t in self._target_by_label.items() if t == chosen), None)
         if chosen and current is None:
@@ -193,24 +230,6 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
             self._target_by_label[current] = chosen
             self._attr_options.append(current)
         self._attr_current_option = current
-        self._suggestions = [
-            {
-                "name": v.obj.display_name,
-                "altitude": round(v.altitude, 1),
-                "visibility": visibility_rating(
-                    v.altitude
-                ),  # good / poor / not_visible (app's color)
-                "recommended_minutes": v.obj.duration or None,
-                "grade": v.obj.grade,
-                "magnitude": v.obj.magnitude,
-                "constellation": v.obj.constellation_name or v.obj.constellation,
-                "category": v.obj.category_label or v.obj.category,
-                "distance": v.obj.distance_display,
-                "is_solar": v.obj.is_solar,
-                "description": v.obj.description,
-            }
-            for v in visible
-        ]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

@@ -382,7 +382,7 @@ def visible_tonight(
     results: list[TonightObject] = []
     for obj in load_catalog():
         if obj.is_solar:
-            if not include_solar:
+            if not include_solar or obj.id.lower() == "sun":  # the Sun is never a normal target
                 continue
         elif not (obj.has_coordinates and (obj.grade or 0) >= min_grade):
             continue
