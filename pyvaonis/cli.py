@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 from typing import Any
 
 import typer
@@ -508,25 +509,25 @@ def image(
     async def _go(scope: VaonisClient) -> Any:
         img = scope.current_image()
         obs = scope.current_observation()
-        live = img is not None
-        if img is None:  # idle → most recent finished frame
-            recent_frames = scope.recent_images()
-            img = recent_frames[0] if recent_frames else None
-        if img is None:
-            return None, "vaonis.jpg"
-        if rendered and live and img.capture_id:
-            scope.request_timeout = timeout
-            data = await scope.fetch_image(
-                img
-            )  # on-demand render (slow); only valid for live frame
-        else:
-            data = await scope.download_file(img.ftp_path)  # static file over FTP (fast)
-        name = obs.object_name if obs and obs.object_name else _run_label(img.url_path)
-        return data, f"{_slugify(name)}_{img.index:04d}.jpg"
+        if img is not None:  # observing → the live frame
+            if rendered and img.capture_id:
+                scope.request_timeout = timeout
+                data = await scope.fetch_image(img)  # firmware on-demand render (slow)
+            else:
+                data = await scope.download_file(img.ftp_path)  # written file over FTP (fast)
+            name = obs.object_name if obs and obs.object_name else _run_label(img.url_path)
+            return data, f"{_slugify(name)}_{img.index:04d}.jpg"
+        # idle → the last frame of the newest finished capture, from the FTP library
+        frame = await _latest_capture_frame(scope)
+        if frame is None:
+            return None, None
+        return await scope.download_file(frame), _capture_frame_name(frame)
 
     data, default = _run(_with_client(ip, False, _go))
     if not data:
-        typer.echo("no image available (no current or recent run on the telescope)")
+        typer.echo(
+            "nothing to grab — not observing, and no finished captures on disk (`vaonis recent`)."
+        )
         raise typer.Exit(1)
     path = out or default
     with open(path, "wb") as fh:
@@ -540,6 +541,35 @@ def _run_label(url_path: str) -> str:
     return parts[-3] if len(parts) >= 3 else "vaonis"
 
 
+async def _latest_capture_frame(scope: VaonisClient) -> str | None:
+    """FTP path of the last frame in the newest /system/captures run (None if none).
+
+    Uses the on-disk capture library (date-prefixed storeIds), not status — so it finds your real
+    most-recent observation. Plan dirs (/system/plan) are ignored.
+    """
+    caps = [e for e in await scope.library(const.FTP_ROOT) if e.is_dir]
+    for cap in sorted(
+        caps, key=lambda e: e.name, reverse=True
+    ):  # storeId date-prefixed → newest 1st
+        frames = [
+            e
+            for e in await scope.library(f"{cap.path}/images")
+            if not e.is_dir and e.name.lower().endswith((".jpg", ".jpeg"))
+        ]
+        if frames:
+            return max(frames, key=lambda e: e.name).path
+    return None
+
+
+def _capture_frame_name(frame_path: str) -> str:
+    """`.../<date>_observation_<obj>/images/IMG_0057.jpg` -> `<obj>_0057.jpg`."""
+    parts = frame_path.split("/")
+    store = parts[-3] if len(parts) >= 3 else "vaonis"
+    obj = store.split("_observation_")[-1] if "_observation_" in store else store
+    match = re.search(r"(\d+)", parts[-1])
+    return f"{_slugify(obj)}_{int(match.group(1)) if match else 0:04d}.jpg"
+
+
 @app.command(rich_help_panel=PANEL_LIVE)
 def recent(limit: int = 15, ip: str = DEFAULT_IP) -> None:
     """List recent capture runs stored on the telescope (newest first), read-only.
@@ -549,11 +579,14 @@ def recent(limit: int = 15, ip: str = DEFAULT_IP) -> None:
     """
 
     async def _go(scope: VaonisClient) -> Any:
-        runs: list[Any] = []
-        for root in (const.FTP_ROOT, "/system/plan"):
-            with contextlib.suppress(VaonisError):
-                runs += [e for e in await scope.library(root) if e.is_dir]
-        return runs
+        captures = plans = []
+        with contextlib.suppress(VaonisError):
+            captures = [e for e in await scope.library(const.FTP_ROOT) if e.is_dir]
+        with contextlib.suppress(VaonisError):
+            plans = [e for e in await scope.library("/system/plan") if e.is_dir]
+        # captures are date-prefixed → newest first; legacy plan dirs after
+        captures.sort(key=lambda e: e.name, reverse=True)
+        return captures + plans
 
     runs = _run(_with_client(ip, False, _go))
     runs.sort(key=lambda e: e.path, reverse=True)  # storeId encodes date → newest first

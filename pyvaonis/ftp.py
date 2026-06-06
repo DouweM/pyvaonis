@@ -11,6 +11,7 @@ import asyncio
 import posixpath
 from dataclasses import dataclass
 from ftplib import FTP
+from ftplib import all_errors
 from ftplib import error_perm
 
 from .const import DEFAULT_IP
@@ -100,10 +101,20 @@ def _download(ip: str, path: str, timeout: float) -> bytes:
 async def list_dir(
     path: str = FTP_ROOT, *, ip: str = DEFAULT_IP, timeout: float = 20.0
 ) -> list[FtpEntry]:
-    """List a directory in the saved library (defaults to ``/user``)."""
-    return await asyncio.to_thread(_list, ip, path, timeout)
+    """List a directory in the saved library (defaults to ``/system/captures``)."""
+    from .client import VaonisConnectionError  # local import: avoid client<->ftp import cycle
+
+    try:
+        return await asyncio.to_thread(_list, ip, path, timeout)
+    except all_errors as err:  # ftplib's Error/OSError/EOFError (incl. 550, refused, timeout)
+        raise VaonisConnectionError(f"FTP list {path!r} failed: {err}") from err
 
 
 async def download(path: str, *, ip: str = DEFAULT_IP, timeout: float = 60.0) -> bytes:
     """Download a saved file by its FTP path."""
-    return await asyncio.to_thread(_download, ip, path, timeout)
+    from .client import VaonisConnectionError
+
+    try:
+        return await asyncio.to_thread(_download, ip, path, timeout)
+    except all_errors as err:
+        raise VaonisConnectionError(f"FTP download {path!r} failed: {err}") from err

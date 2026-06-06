@@ -45,9 +45,13 @@ class LiveImage(BaseModel):
     @property
     def ftp_path(self) -> str:
         """FTP path of the same frame file (the ``/files`` HTTP root maps to ``/system`` on FTP)."""
-        if self.url_path.startswith("/files/"):
-            return "/system/" + self.url_path[len("/files/") :]
-        return self.url_path
+        path = self.url_path
+        if path.startswith("/files/"):
+            path = "/system/" + path[len("/files/") :]
+        # HTTP advertises plan frames under /files/plans/ but FTP stores them under /system/plan/.
+        if path.startswith("/system/plans/"):
+            path = "/system/plan/" + path[len("/system/plans/") :]
+        return path
 
 
 def _capture_image(capture: dict[str, Any]) -> LiveImage | None:

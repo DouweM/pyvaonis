@@ -395,16 +395,32 @@ which NATs LAN→Stellina (the default direction, so no custom firewall rules).
 3. **UDM → static route:** `10.0.0.0/24` → next hop `10.3.142.50`. That's the whole bridge — your
    network now reaches `10.0.0.1` via the Mango, which NATs to the Stellina. All three services work
    over the route (no per-port forwarding).
-4. **FTP (saved library)** usually needs nothing extra here: pyvaonis uses passive mode and ignores
-   the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`), so the data connection is just
-   another routed+masqueraded outbound connection — REST (8082) / socket (8083) likewise. **Only if
-   `vaonis library` stalls** (control connects, data never opens) enable the Mango's FTP conntrack
-   helper: `opkg install kmod-nf-nat-ftp kmod-nf-conntrack-ftp`, then on firmware 3.x set
-   `net.netfilter.nf_conntrack_helper=1` (sysctl, persist in `/etc/sysctl.conf`) or on firmware 4.x
-   add an `ftp` CT helper in `/etc/config/firewall`; `/etc/init.d/firewall restart`. (The helper only
-   matters for DNAT/port-forward or active FTP — not this route-based path.)
-5. Point HA / pyvaonis at **`10.0.0.1`** (`VAONIS_HOST=10.0.0.1`). Test with `vaonis doctor` then
-   `vaonis watch`.
+4. **Return route on the Mango** (don't skip — replies die without it): the Mango's only default
+   route is the Stellina (`10.0.0.1` via the repeater), so replies to HA on another VLAN would go to
+   the scope. Add a route so it sends them back to the UDM (LuCI → Static Routes, or SSH):
+   ```sh
+   uci add network route; uci set network.@route[-1].interface='lan'
+   uci set network.@route[-1].target='10.3.0.0'; uci set network.@route[-1].netmask='255.255.0.0'
+   uci set network.@route[-1].gateway='10.3.142.1'   # supernet covering your VLANs → UDM
+   uci commit network && /etc/init.d/network restart
+   ```
+5. **FTP (saved library)** needs nothing extra here — **confirmed on hardware**: pyvaonis uses
+   passive mode and ignores the scope's advertised `10.0.0.1` (like `curl --ftp-skip-pasv-ip`), so the
+   data connection is just another routed+masqueraded outbound; REST (8082) / socket (8083) likewise.
+   You only need the Mango's FTP conntrack helper for the *port-forward* variant or active FTP — not
+   this route-based path.
+6. Point HA / pyvaonis at **`10.0.0.1`** (`VAONIS_HOST=10.0.0.1`). Test with `vaonis doctor`,
+   `vaonis watch`, then `vaonis library` (lists your `/system/captures` runs).
+
+**Bridge gotchas (learned bringing one up):**
+- **UniFi port must be the IoT VLAN as *native/untagged*, not "tagged."** The Mango's LAN sends
+  untagged frames; a tagged-only port drops them. Quick L2 check: from the Mango, `ping 10.3.142.1`
+  (the UDM) — works ⇒ VLAN/L2 fine, problem is elsewhere; fails ⇒ fix the native VLAN.
+- **OPEN-network repeater flakiness:** the MT300N-V2's legacy MediaTek `apcli0` driver can associate
+  but never DHCP on an OPEN AP. If a firmware factory-reset doesn't fix it, give `wwan` a **static IP**
+  (`10.0.0.50/24`, gw `10.0.0.1`). (A reset fixed it on the test unit.)
+- Disable the Mango's **LAN DHCP** (Interfaces → LAN → DHCP Server → *Ignore interface*) so it
+  doesn't fight UniFi.
 
 **Always-on Mango, scope only on when in use:** repeater mode **remembers the SSID and
 auto-reconnects** — configure it once (Stellina on), and the Mango rejoins `STELLINA-xxxx` by itself

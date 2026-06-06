@@ -124,6 +124,13 @@ So **all past sessions' frames are retrievable over FTP** under `/system/capture
 target + settings; `storeId` encodes date + object). Note `captureStore.storedCaptures` (the
 "multi-night resumable" set) is *separate* and can be empty even when many capture dirs exist.
 
+**Path quirk (confirmed on hardware):** plan frames are served over **HTTP as `/files/plans/…`
+(plural)** but stored on **FTP as `/system/plan/…` (singular)** — `LiveImage.ftp_path` rewrites the
+plural→singular. Captures match (`/files/captures` ↔ `/system/captures`). The status
+`previousOperations` can also be stale (e.g. only a reboot-restored plan), so the **live `image`
+fallback and the gallery read the FTP `/system/captures` library directly** (date-prefixed storeIds,
+newest first) rather than trusting `previousOperations`.
+
 ## Quirks observed live (firmware 2.35.7)
 - **`masterDeviceId` can be `null` while an observation is still running** — the scope keeps
   imaging autonomously after the controlling app releases/backgrounds. So "observing" ≠ "someone
