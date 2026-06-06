@@ -370,10 +370,9 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   *picks* the target (no slew) — press **Observe** to start it (browse-then-Observe, like the app).
   Available only when idle. `suggestions` attribute carries name/altitude/magnitude/constellation/
   description.
-- Cameras: **Live view** of the current stacked frame (only available while observing), and
-  **Latest image** — always shows the most recent image: the live frame while observing, otherwise
-  the newest saved capture (its `source` attribute says `live` or `archived`), so a dashboard card is
-  never blank.
+- Image: **Latest image** — a single `image` entity (telescope stacks are slow stills, not a video
+  feed) that always shows the most recent frame: live while observing, otherwise the newest saved
+  capture. Its `source` attribute says `live` or `archived`, and it carries a last-updated timestamp.
 - Media source: **Vaonis** in the HA media browser — *Recent captures* (newest run, live frame on top)
   and *Saved library* (FTP `/system/captures`), streamed through HA via a proxy view.
 - Services: **`vaonis.observe`** (slew to any catalog object), **`vaonis.autoinit`** (the Initialize
@@ -467,7 +466,7 @@ a dual-band GL-SFT1200 "Opal" ~$40 / GL-A1300 "Slate Plus" ~$70 avoids it); keep
 ```
 custom_components/vaonis/   # HACS integration
   __init__.py coordinator.py entity.py config_flow.py
-  sensor.py binary_sensor.py button.py select.py camera.py
+  sensor.py binary_sensor.py button.py select.py switch.py image.py
   media_source.py http.py   # media browser + proxy view
   manifest.json hacs.json strings.json services.yaml const.py
   pyvaonis/                 # the bundled library (also the importable `pyvaonis` package)

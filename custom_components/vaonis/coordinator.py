@@ -13,6 +13,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -37,7 +38,12 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
 
     def __init__(self, hass: HomeAssistant, entry: VaonisConfigEntry) -> None:
         """Initialise the coordinator."""
-        super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=None)
+        # Status arrives via push (socket.io); the interval is just a watchdog that detects a dropped
+        # connection and reconnects when the scope is powered back on (e.g. after a shutdown), so the
+        # entities recover without a reload. When connected it's a cheap no-op (returns the last push).
+        super().__init__(
+            hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=timedelta(seconds=30)
+        )
         self.client = VaonisClient(
             ip=entry.data[CONF_HOST],
             session=async_get_clientsession(hass),

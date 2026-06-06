@@ -22,6 +22,9 @@ class VaonisBinaryDescription(BinarySensorEntityDescription):
     """Binary sensor description with a value extractor."""
 
     value_fn: Callable[[VaonisCoordinator], bool | None]
+    # Stay available even when the telescope is unreachable (so it can report the disconnect itself
+    # as "off" rather than going Unavailable along with everything else).
+    always_available: bool = False
 
 
 BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
@@ -30,6 +33,7 @@ BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.client.connected,
+        always_available=True,
     ),
     VaonisBinaryDescription(
         # Primary (not diagnostic): being initialised/aligned gates the whole observing flow.
@@ -113,6 +117,13 @@ class VaonisBinarySensor(VaonisEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return the current state."""
         return self.entity_description.value_fn(self.coordinator)
+
+    @property
+    def available(self) -> bool:
+        """Connectivity stays available (to report 'off' when disconnected); others follow the coordinator."""
+        if self.entity_description.always_available:
+            return True
+        return super().available
 
 
 class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):

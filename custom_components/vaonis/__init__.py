@@ -41,7 +41,7 @@ def _guard_service(handler):  # type: ignore[no-untyped-def]
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
-    Platform.CAMERA,
+    Platform.IMAGE,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,

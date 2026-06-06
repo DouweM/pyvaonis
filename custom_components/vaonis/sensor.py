@@ -164,10 +164,10 @@ def _controlling_device(coordinator: VaonisCoordinator) -> Any:
 
 
 # EntityCategory convention (keep consistent): the scope's *observing activity & results* are primary
-# (no category) — Status, current operation/target/step, the capture telemetry (stacked/total frames,
-# integration time, frames acquired, gain, exposure), and plan state/target. Everything that's device
-# housekeeping — environment (temperature/humidity/dew point), storage, Wi-Fi band, hardware filter,
-# focuser temperature, who's in control, and the init-progress detail — is DIAGNOSTIC.
+# (no category) — Status, init step, current operation/target/step, the capture telemetry (stacked/
+# total frames, integration time, frames acquired, gain, exposure), and plan state/target. Everything
+# that's device housekeeping — environment (temperature/humidity/dew point), storage, Wi-Fi band,
+# hardware filter, focuser temperature, and who's in control — is DIAGNOSTIC.
 SENSORS: tuple[VaonisSensorDescription, ...] = (
     VaonisSensorDescription(
         key="status",
@@ -176,10 +176,10 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         value_fn=_status_summary,
     ),
     VaonisSensorDescription(
+        # Primary (not diagnostic): the initialization phase is part of the core observing flow.
         key="init_step",
         translation_key="init_step",
         icon="mdi:crosshairs-gps",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_init_step,
         available_fn=_initializing,
     ),

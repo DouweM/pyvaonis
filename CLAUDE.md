@@ -47,7 +47,7 @@ end-to-end (status/library/image over the route; gotcha: the UniFi port must car
 ## Repo layout
 ```
 custom_components/vaonis/  HACS integration (coordinator/entity/config_flow/sensor/binary_sensor/
-                       button/select/camera/media_source/http + manifest/hacs/strings/services.yaml)
+                       button/select/switch/image/media_source/http + manifest/hacs/strings/services.yaml)
 custom_components/vaonis/pyvaonis/   the bundled library — ALSO the importable `pyvaonis` package
                        (single source of truth). const.py auth.py _eio3.py models.py client.py
                        catalog.py astro.py observation.py plan.py weather.py ftp.py cli.py
@@ -101,9 +101,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   Step 1: re-extract catalog keeping `distance/realSize/discoveredBy` + bundle `catalog_object/*.png`
   (lowercased id, rotate 90°) + `constellations.json`.
 - HA: media-source over `/files`/FTP `/system/captures`; `run_plan`/`stop_plan` now drive the native
-  Plan-My-Night (`client.start_plan`/`stop_plan`). Two cameras: **Live view** (live-only, unavailable
-  when idle) and **Latest image** (`VaonisLatestCamera` — live frame while observing, else newest FTP
-  capture via `client.latest_capture_path()`; `source` attr = live|archived). Observation/plan/init
+  Plan-My-Night (`client.start_plan`/`stop_plan`). Single **image** entity (`VaonisImage`, Platform.
+  IMAGE — slow stills, not a camera/video feed): live frame while observing, else newest FTP capture
+  via `client.latest_capture_path()`; `source` attr = live|archived; `image_last_updated` bumped when
+  the (observing, stacking_count) signature changes. Observation/plan/init
   sensors use `available_fn` to report **Unavailable** (not "Unknown") when idle. `autoinit`/`run_plan`
   default location to `client.location()` (scope's own position) → HA home fallback. Entity names load
   from `translations/en.json` (NOT just strings.json — custom integrations need the translations dir).
@@ -114,7 +115,10 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   park only idle+not-parked, observe only idle+initialized+target-chosen, stop/refocus/multi-night
   only while observing, enable-multi-night also needs ≥1 stacked frame and not-already-resumable).
   EntityCategory: observing activity/telemetry primary, device housekeeping diagnostic (rule in
-  sensor.py). Controlling-device sensor shows "Nobody" when `masterDeviceId` is null.
+  sensor.py). Controlling-device sensor shows "Nobody" when `masterDeviceId` is null. The Connectivity
+  binary_sensor is `always_available` (reports **off** when the scope is unreachable instead of going
+  Unavailable like everything else). Coordinator has a 30s watchdog `update_interval` that reconnects
+  after the scope is powered back on (cheap no-op while connected) — so entities recover without a reload.
 - Next API surfaces (bodies mapped): captureStore resume, playlist, sun/eclipse, expert raw, mosaic.
 
 ## Control / observation ordering (mirrors the app — verified in decompiled source)
