@@ -158,9 +158,14 @@ Commit messages end with the Co-Authored-By trailer; bundle related changes; kee
   "No filter" not raw enums. **BalENS** = the app's HDR-background processing (`enableHdrBackground` +
   `algoHdrBackground` level RECOMMENDED/SOFT/HARD/OLD; OLD = "First Edition"); switch/select/CLI
   (`balens-level`) all route through `coordinator.run_action` (settings need control — HA is read-only).
-  **BalENS is `HDR_BACKGROUND` = Vespera-Pro/Pro2 ONLY** (per `InstrumentModelKt`; Stellina/Vespera lack
-  it) — the switch + level select are **model-gated** via `const.model_supports(model, "HDR_BACKGROUND")`
-  and don't appear on a Stellina. Same gating pattern would apply to DARKS (also Vespera-Pro-only). The Connectivity
+  **Device-setting entities are per-model** (`const.MODEL_SETTINGS`/`model_supports`, mirroring
+  `InstrumentModelKt`): generic `VaonisSettingSwitch` for each `SettingsBody` bool — **Live focus**
+  (`enableLiveFocus`/LIVE_FOCUS), **Full resolution** (FULL_RESOLUTION, Stellina), **Dithering**
+  (Vespera), **Use master dark** (DARKS, Vespera Pro), **BalENS** (HDR_BACKGROUND, Vespera Pro) — plus a
+  **Button brightness** select (BTN_BRIGHTNESS) and the **BalENS level** select; each only created when
+  the model supports it (so a Stellina shows Live focus + Full resolution, NOT BalENS/darks). All write
+  via `client.set_setting(field, value)` → `_update_settings` (echoes other settings) through
+  `run_action`. `set_multi_light`/`set_balens_level` remain as convenience wrappers. The Connectivity
   binary_sensor is `always_available` (reports **off** when the scope is unreachable instead of going
   Unavailable like everything else). Coordinator has a 30s watchdog `update_interval` that reconnects
   after the scope is powered back on (cheap no-op while connected) — so entities recover without a reload.

@@ -745,6 +745,13 @@ class VaonisClient:
         """Set the BalENS processing level: RECOMMENDED / SOFT / HARD / OLD (First Edition)."""
         return await self._update_settings(algoHdrBackground=const.normalize_balens_level(level))
 
+    async def set_setting(self, field: str, value: Any) -> dict[str, Any]:
+        """Set a single device setting (e.g. ``enableLiveFocus``, ``buttonBrightness``), echoing the rest.
+
+        Which settings a model actually supports is per-model (see ``const.model_supports``).
+        """
+        return await self._update_settings(**{field: value})
+
     async def enable_multi_night(self) -> dict[str, Any]:
         """Enable "multi-night": keep the current stack in the telescope's stored-captures library
         so it can resume integrating on a later night (``capture/setToBeResumable``).

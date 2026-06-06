@@ -1,8 +1,9 @@
-"""Switch platform: Multi-Light (device setting) + local Mosaic/Multi-night observe toggles."""
+"""Switch platform: per-model device settings + local Mosaic/Multi-night observe toggles."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -17,71 +18,82 @@ from .entity import VaonisEntity
 from .pyvaonis.const import model_supports
 
 
+@dataclass(frozen=True)
+class _SettingSwitch:
+    """A boolean device setting (``SettingsBody`` field) exposed only on models that support it."""
+
+    key: str  # entity key + translation_key
+    field: str  # SettingsBody field, e.g. enableLiveFocus
+    capability: str  # model capability gate (const.MODEL_SETTINGS), e.g. LIVE_FOCUS
+    icon: str
+
+
+# Each appears only on models whose InstrumentModelKt settings list includes the capability.
+_SETTING_SWITCHES: tuple[_SettingSwitch, ...] = (
+    _SettingSwitch("live_focus", "enableLiveFocus", "LIVE_FOCUS", "mdi:image-auto-adjust"),
+    _SettingSwitch(
+        "full_resolution", "enableFullResolution", "FULL_RESOLUTION", "mdi:quality-high"
+    ),
+    _SettingSwitch("dithering", "enableDithering", "DITHERING", "mdi:dots-grid"),
+    _SettingSwitch("dark_usage", "enableDarkUsage", "DARKS", "mdi:image-filter-black-white"),
+    _SettingSwitch("multi_light", "enableHdrBackground", "HDR_BACKGROUND", "mdi:hdr"),  # BalENS
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Mosaic / Multi-night observe toggles (+ BalENS where the model supports it)."""
+    """Set up the supported device-setting switches + the Mosaic / Multi-night observe toggles."""
     coordinator = entry.runtime_data
     model = coordinator.data.model if coordinator.data else None
-    entities: list[SwitchEntity] = []
-    # BalENS (HDR background) is Vespera-Pro-only — don't surface it on models without it (e.g. Stellina).
-    if model_supports(model, "HDR_BACKGROUND"):
-        entities.append(VaonisMultiLightSwitch(coordinator))
-    entities.extend(
-        [
-            # Local toggles the Observe button reads (Advanced observation): mosaic + multi-night.
-            VaonisOptionSwitch(
-                coordinator,
-                "mosaic",
-                "mdi:grid",
-                lambda c: c.mosaic_enabled,
-                lambda c, v: setattr(c, "mosaic_enabled", v),
-                # Mosaic only applies to a *new* observation (set at start) — disable while busy.
-                available_fn=lambda c: bool(c.data) and not c.data.is_busy,
-            ),
-            VaonisMultiNightSwitch(coordinator),
-        ]
+    entities: list[SwitchEntity] = [
+        VaonisSettingSwitch(coordinator, s)
+        for s in _SETTING_SWITCHES
+        if model_supports(model, s.capability)
+    ]
+    # Local toggles the Observe button reads (Advanced observation): mosaic + multi-night.
+    entities.append(
+        VaonisOptionSwitch(
+            coordinator,
+            "mosaic",
+            "mdi:grid",
+            lambda c: c.mosaic_enabled,
+            lambda c, v: setattr(c, "mosaic_enabled", v),
+            # Mosaic only applies to a *new* observation (set at start) — disable while busy.
+            available_fn=lambda c: bool(c.data) and not c.data.is_busy,
+        )
     )
+    entities.append(VaonisMultiNightSwitch(coordinator))
     async_add_entities(entities)
 
 
-class VaonisMultiLightSwitch(VaonisEntity, SwitchEntity):
-    """BalENS (the app's HDR-background processing) — a persistent device setting."""
+class VaonisSettingSwitch(VaonisEntity, SwitchEntity):
+    """A boolean device setting (``app/setSettings``) — only created for models that support it."""
 
-    _attr_translation_key = "multi_light"
-    _attr_icon = "mdi:hdr"
-    _attr_entity_category = EntityCategory.CONFIG  # a device setting, not a primary control
+    _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, coordinator: VaonisCoordinator) -> None:
-        """Initialise the switch."""
-        super().__init__(coordinator, "multi_light")
+    def __init__(self, coordinator: VaonisCoordinator, setting: _SettingSwitch) -> None:
+        """Initialise the setting switch."""
+        super().__init__(coordinator, setting.key)
+        self._attr_translation_key = setting.key
+        self._attr_icon = setting.icon
+        self._field = setting.field
 
     @property
     def is_on(self) -> bool:
-        """Whether BalENS is on, from `settings.enableHdrBackground` (or the algo mode).
-
-        Always a definite bool: returning None puts the switch in an "unknown" state, which HA renders
-        as two on/off buttons instead of a single toggle.
-        """
+        """Read the setting's boolean (a definite bool, else HA renders two on/off buttons)."""
         settings = self._status_value("settings")
-        if not isinstance(settings, dict):
-            return False
-        enabled = settings.get("enableHdrBackground")
-        if isinstance(enabled, bool):
-            return enabled
-        # Some firmwares report only the algo mode; absent/NONE/OFF means off.
-        algo = settings.get("algoHdrBackground")
-        return bool(algo) and str(algo).upper() not in ("NONE", "OFF")
+        return bool(settings.get(self._field)) if isinstance(settings, dict) else False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable BalENS (one-shot: take control, set, release)."""
-        await self.coordinator.run_action(lambda c: c.set_multi_light(True))
+        """Enable the setting (one-shot: take control, set, release)."""
+        await self.coordinator.run_action(lambda c: c.set_setting(self._field, True))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable BalENS (one-shot: take control, set, release)."""
-        await self.coordinator.run_action(lambda c: c.set_multi_light(False))
+        """Disable the setting (one-shot: take control, set, release)."""
+        await self.coordinator.run_action(lambda c: c.set_setting(self._field, False))
 
 
 class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):

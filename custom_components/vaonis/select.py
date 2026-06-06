@@ -37,6 +37,7 @@ _BALENS_LABELS = {
     "HARD": "Hard",
     "OLD": "First Edition",
 }
+_BRIGHTNESS_LABELS = {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High"}
 
 
 async def async_setup_entry(
@@ -44,13 +45,66 @@ async def async_setup_entry(
     entry: VaonisConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the target select (+ BalENS level where the model supports HDR background)."""
+    """Set up the target select (+ BalENS level / button brightness where the model supports them)."""
     coordinator = entry.runtime_data
-    selects: list[SelectEntity] = [VaonisTargetSelect(coordinator, hass)]
     model = coordinator.data.model if coordinator.data else None
+    selects: list[SelectEntity] = [VaonisTargetSelect(coordinator, hass)]
     if model_supports(model, "HDR_BACKGROUND"):  # BalENS is Vespera-Pro-only
         selects.append(VaonisBalensLevelSelect(coordinator))
+    if model_supports(model, "BTN_BRIGHTNESS"):  # LED brightness (Vespera / Vespera Pro)
+        selects.append(VaonisButtonBrightnessSelect(coordinator))
     async_add_entities(selects)
+
+
+class VaonisSettingSelect(VaonisEntity, SelectEntity):
+    """A device-setting picker (``app/setSettings``) with friendly labels mapped to wire values."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: VaonisCoordinator,
+        key: str,
+        icon: str,
+        field: str,
+        labels: dict[str, str],
+    ) -> None:
+        """Initialise a settings select (``labels`` maps wire value -> display label)."""
+        super().__init__(coordinator, key)
+        self._attr_translation_key = key
+        self._attr_icon = icon
+        self._field = field
+        self._labels = labels
+        self._attr_options = list(labels.values())
+
+    @property
+    def current_option(self) -> str | None:
+        """The setting's current value as a friendly label, or None if unknown."""
+        settings = self._status_value("settings")
+        value = settings.get(self._field) if isinstance(settings, dict) else None
+        return self._labels.get(value)
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the setting (one-shot: take control, set, release)."""
+        wire = next((k for k, label in self._labels.items() if label == option), option)
+        try:
+            await self.coordinator.run_action(lambda c: c.set_setting(self._field, wire))
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
+
+
+class VaonisButtonBrightnessSelect(VaonisSettingSelect):
+    """The telescope's LED button brightness — Low / Medium / High."""
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the button-brightness select."""
+        super().__init__(
+            coordinator,
+            "button_brightness",
+            "mdi:brightness-6",
+            "buttonBrightness",
+            _BRIGHTNESS_LABELS,
+        )
 
 
 class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):

@@ -370,9 +370,11 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
   *picks* the target (no slew) — press **Observe** to start it (browse-then-Observe, like the app).
   Available only when idle. `suggestions` attribute carries name/altitude/magnitude/constellation/
   description.
-- Configuration (settings, grouped separately from controls): **BalENS** on/off + **BalENS level**
-  (Recommended/Soft/Hard/First Edition), the **Mosaic mode** / **Multi-night mode** toggles, and the
-  **Mosaic width/height** numbers the Observe button respects.
+- Configuration (settings, grouped separately from controls) — **shown per model** (only the ones the
+  telescope supports, mirroring the app): device settings **Live focus**, **Full resolution**,
+  **Dithering**, **Use master dark**, **BalENS** + **BalENS level**, **Button brightness**; plus the
+  local **Mosaic mode** / **Multi-night mode** toggles and **Mosaic width/height** numbers the Observe
+  button respects. (E.g. a Stellina shows Live focus + Full resolution; BalENS/darks are Vespera-Pro.)
 
 So the whole **Advanced observation** flow is point-and-click from a dashboard: flip **Mosaic mode**
 (and set width/height), and/or **Multi-night mode**, pick a target, press **Observe** — then **Resume**

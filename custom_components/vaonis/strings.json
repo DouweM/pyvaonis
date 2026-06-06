@@ -65,10 +65,15 @@
     },
     "select": {
       "target": { "name": "Tonight's target" },
-      "balens_level": { "name": "BalENS level" }
+      "balens_level": { "name": "BalENS level" },
+      "button_brightness": { "name": "Button brightness" }
     },
     "switch": {
       "multi_light": { "name": "BalENS (HDR background)" },
+      "live_focus": { "name": "Live focus" },
+      "full_resolution": { "name": "Full resolution" },
+      "dithering": { "name": "Dithering" },
+      "dark_usage": { "name": "Use master dark" },
       "mosaic": { "name": "Mosaic mode" },
       "multi_night": { "name": "Multi-night mode" }
     },
