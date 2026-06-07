@@ -152,7 +152,9 @@ def summarize(raw: dict[str, Any] | None) -> str:
     """One-line "what is the scope doing right now", in the app's wording."""
     op = raw.get("currentOperation") if raw else None
     if not isinstance(op, dict) or op.get("stopped"):
-        return "Idle"
+        # No operation running: the scope is either ready ("Idle") or hasn't been aligned yet
+        # ("Not initialized"), which the app treats as a distinct state.
+        return "Not initialized" if raw and raw.get("initialized") is False else "Idle"
     op_type = op.get("type")
 
     if op_type == "OBSERVATION":

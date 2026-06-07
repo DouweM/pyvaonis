@@ -10,6 +10,16 @@ def test_idle() -> None:
     assert summarize(None) == "Idle"
     assert summarize({}) == "Idle"
     assert summarize({"currentOperation": {"type": "OBSERVATION", "stopped": True}}) == "Idle"
+    assert summarize({"initialized": True}) == "Idle"
+
+
+def test_not_initialized() -> None:
+    assert summarize({"initialized": False}) == "Not initialized"
+    # Idle but not yet aligned, even with a stopped op present.
+    assert (
+        summarize({"initialized": False, "currentOperation": {"type": "PARK", "stopped": True}})
+        == "Not initialized"
+    )
 
 
 def test_observation_stacking() -> None:
@@ -86,8 +96,8 @@ def test_autoinit_failure_not_enough_stars() -> None:
     assert signature == "ai-1"
     assert short == "Not enough stars"
     assert "stars" in detail
-    # Headline shows the failure instead of collapsing to "Idle".
-    assert summarize(raw) == "Idle"  # summarize itself stays raw; the sensor layer overlays failure
+    # summarize itself reflects the not-initialized scope; the sensor layer overlays the failure.
+    assert summarize(raw) == "Not initialized"
 
 
 def test_autoinit_failure_none_when_running_or_done() -> None:
