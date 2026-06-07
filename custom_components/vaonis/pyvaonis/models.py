@@ -7,6 +7,7 @@ is large and firmware-dependent, so :class:`VaonisStatus` keeps the full payload
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any
 
 from pydantic import BaseModel
@@ -32,9 +33,14 @@ class VaonisStatus(BaseModel):
     shutting_down: bool | None = Field(default=None, alias="shuttingDown")
     model: str | None = None
 
-    @property
+    @cached_property
     def raw(self) -> dict[str, Any]:
-        """The full status payload, including fields not modelled above."""
+        """The full status payload, including fields not modelled above.
+
+        Cached: a status object is created once per push and read by many entities (each digging a
+        few values), so re-running ``model_dump`` on every access was dozens of full serializations
+        of this large nested dict per update — enough synchronous work on the event loop to make the
+        socket read loop fall behind and deliver updates in bursts. Treat the result as read-only."""
         return self.model_dump(by_alias=True)
 
     @property

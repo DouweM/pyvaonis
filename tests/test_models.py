@@ -60,3 +60,10 @@ def test_observation_body_drops_none_and_aliases() -> None:
     assert "exposureMicroSec" not in payload
     assert "brightZoneOffset" not in payload  # omitted for AUTO
     assert "histogramLow" not in payload  # omitted when not stacking
+
+
+def test_raw_is_cached() -> None:
+    # raw is read many times per status update; it must be computed once, not re-dumped each access.
+    status = VaonisStatus.model_validate({"telescopeId": "stellina-x", "currentOperation": None})
+    assert status.raw is status.raw  # same object -> cached
+    assert status.raw["telescopeId"] == "stellina-x"
