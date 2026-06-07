@@ -98,6 +98,7 @@ async def async_setup_entry(
         VaonisBinarySensor(coordinator, description) for description in BINARY_SENSORS
     ]
     entities.append(VaonisDarkSensor(coordinator, hass))
+    entities.append(VaonisInitFailedSensor(coordinator))
     async_add_entities(entities)
 
 
@@ -163,3 +164,31 @@ class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
             attrs["dark_start"] = window[0].isoformat()
             attrs["dark_end"] = window[1].isoformat()
         return attrs
+
+
+class VaonisInitFailedSensor(VaonisEntity, BinarySensorEntity):
+    """On when the last auto-init failed (e.g. not enough stars); ``reason`` carries the detail.
+
+    The firmware clears the operation after a failed init, so this would otherwise vanish into "Idle".
+    It clears once the user takes the next action (Close arm / Initialize again), succeeds, or the
+    scope reports initialized — handled by the coordinator's init_failure logic.
+    """
+
+    _attr_translation_key = "init_failed"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:crosshairs-question"
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the init-failed sensor."""
+        super().__init__(coordinator, "init_failed")
+
+    @property
+    def is_on(self) -> bool:
+        """True when there's an unacknowledged init failure (a definite bool)."""
+        return self.coordinator.init_failure is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """The failure reason, when failed."""
+        reason = self.coordinator.init_failure
+        return {"reason": reason} if reason else {}

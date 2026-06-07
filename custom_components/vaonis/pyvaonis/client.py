@@ -354,14 +354,19 @@ class VaonisClient:
         body: dict[str, Any] | None = None,
         *,
         allow_unsafe: bool = False,
+        timeout_s: float | None = None,
     ) -> dict[str, Any]:
-        """Low-level signed REST call. Returns the parsed JSON body. Enforces endpoint guards."""
+        """Low-level signed REST call. Returns the parsed JSON body. Enforces endpoint guards.
+
+        ``timeout_s`` overrides the default request timeout for slow mechanical commands (e.g. the
+        firmware only answers ``park`` once the arm has finished closing, which exceeds the default).
+        """
         self._guard_endpoint(endpoint, allow_unsafe=allow_unsafe)
         if self._session is None:
             raise VaonisCommandError("client not connected")
         url = const.base_url(self.ip) + endpoint
         headers = {"Authorization": self._auth_header()}
-        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
+        timeout = aiohttp.ClientTimeout(total=timeout_s or self.request_timeout)
         try:
             async with self._session.request(
                 method,
@@ -380,7 +385,7 @@ class VaonisClient:
                 if data.get("success") is False:
                     raise VaonisCommandError(f"{endpoint} returned success=false")
                 return data
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             raise VaonisConnectionError(f"{endpoint}: {err}") from err
 
     async def call(
@@ -413,11 +418,20 @@ class VaonisClient:
             return {"status": resp.status, "body": parsed}
 
     async def post(
-        self, endpoint: str, body: dict[str, Any] | None = None, *, allow_unsafe: bool = False
+        self,
+        endpoint: str,
+        body: dict[str, Any] | None = None,
+        *,
+        allow_unsafe: bool = False,
+        timeout_s: float | None = None,
     ) -> dict[str, Any]:
         """POST a JSON body to an endpoint (defaults to ``{}``)."""
         return await self.request(
-            "POST", endpoint, body if body is not None else {}, allow_unsafe=allow_unsafe
+            "POST",
+            endpoint,
+            body if body is not None else {},
+            allow_unsafe=allow_unsafe,
+            timeout_s=timeout_s,
         )
 
     async def get(self, endpoint: str) -> dict[str, Any]:
@@ -690,6 +704,12 @@ class VaonisClient:
 
         return labels.autoinit_step_label(self.status.raw) if self.status else None
 
+    def autoinit_failure(self) -> tuple[str, str] | None:
+        """The last auto-init failure as ``(signature, message)``, or None — see labels.autoinit_failure."""
+        from . import labels
+
+        return labels.autoinit_failure(self.status.raw if self.status else None)
+
     # -- in-observation controls (the app's Change Framing / Restart autofocus / etc.) ---
     async def adjust_framing(self, x: int, y: int, rot: float = 0.0) -> dict[str, Any]:
         """Nudge the live framing — ``x``/``y`` integer offsets, ``rot`` in degrees."""
@@ -879,9 +899,14 @@ class VaonisClient:
         return sorted(frames, key=lambda e: e.name, reverse=True)
 
     async def park(self) -> dict[str, Any]:
-        """Return the arm to its parked position (refused mid-operation; stop first)."""
+        """Return the arm to its parked position (refused mid-operation; stop first).
+
+        The firmware answers only once the arm has finished closing, which routinely exceeds the
+        default timeout — so allow longer here to avoid a spurious timeout error on a command that
+        actually succeeded.
+        """
         self._require_idle("park")
-        return await self.post(const.Endpoint.PARK)
+        return await self.post(const.Endpoint.PARK, timeout_s=120.0)
 
     async def request_shutdown(self, *, force: bool = False) -> dict[str, Any]:
         """Power off the telescope board (drops the link; needs the physical button to restart).

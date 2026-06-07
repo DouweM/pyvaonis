@@ -19,67 +19,168 @@
   },
   "entity": {
     "sensor": {
-      "status": { "name": "Status" },
-      "init_step": { "name": "Initialization step" },
-      "operation": { "name": "Current operation" },
-      "target": { "name": "Current target" },
-      "latest_target": { "name": "Latest target" },
-      "step": { "name": "Current step" },
-      "stacking_count": { "name": "Stacked frames" },
-      "total_stacking": { "name": "Total stacked frames" },
-      "integration": { "name": "Integration time" },
-      "dewpoint_depression": { "name": "Dew point depression" },
-      "storage_free": { "name": "Storage free" },
-      "band": { "name": "Wi-Fi band" },
-      "filter": { "name": "Filter" },
-      "autofocus_temperature": { "name": "Autofocus temperature" },
-      "controlling_device": { "name": "Controlling device" },
-      "frames_acquired": { "name": "Frames acquired" },
-      "gain": { "name": "Gain" },
-      "exposure": { "name": "Exposure" },
-      "plan_state": { "name": "Plan state" },
-      "plan_target": { "name": "Plan target" },
-      "stored_captures": { "name": "Multi-night captures" }
+      "status": {
+        "name": "Status"
+      },
+      "init_step": {
+        "name": "Initialization step"
+      },
+      "operation": {
+        "name": "Current operation"
+      },
+      "target": {
+        "name": "Current target"
+      },
+      "latest_target": {
+        "name": "Latest target"
+      },
+      "step": {
+        "name": "Current step"
+      },
+      "stacking_count": {
+        "name": "Stacked frames"
+      },
+      "total_stacking": {
+        "name": "Total stacked frames"
+      },
+      "integration": {
+        "name": "Integration time"
+      },
+      "dewpoint_depression": {
+        "name": "Dew point depression"
+      },
+      "storage_free": {
+        "name": "Storage free"
+      },
+      "band": {
+        "name": "Wi-Fi band"
+      },
+      "filter": {
+        "name": "Filter"
+      },
+      "autofocus_temperature": {
+        "name": "Autofocus temperature"
+      },
+      "controlling_device": {
+        "name": "Controlling device"
+      },
+      "frames_acquired": {
+        "name": "Frames acquired"
+      },
+      "gain": {
+        "name": "Gain"
+      },
+      "exposure": {
+        "name": "Exposure"
+      },
+      "plan_state": {
+        "name": "Plan state"
+      },
+      "plan_target": {
+        "name": "Plan target"
+      },
+      "stored_captures": {
+        "name": "Multi-night captures"
+      }
     },
     "image": {
-      "image": { "name": "Latest image" }
+      "image": {
+        "name": "Latest image"
+      }
     },
     "binary_sensor": {
-      "initialized": { "name": "Initialized" },
-      "has_control": { "name": "Has control" },
-      "dark": { "name": "Dark enough to observe" },
-      "tracking": { "name": "Tracking" },
-      "defog": { "name": "Defog active" },
-      "update_available": { "name": "Firmware update available" }
+      "initialized": {
+        "name": "Initialized"
+      },
+      "has_control": {
+        "name": "Has control"
+      },
+      "dark": {
+        "name": "Dark enough to observe"
+      },
+      "tracking": {
+        "name": "Tracking"
+      },
+      "defog": {
+        "name": "Defog active"
+      },
+      "update_available": {
+        "name": "Firmware update available"
+      },
+      "init_failed": {
+        "name": "Initialization failed"
+      }
     },
     "button": {
-      "initialize": { "name": "Initialize" },
-      "observe": { "name": "Observe" },
-      "resume": { "name": "Resume multi-night capture" },
-      "take_control": { "name": "Take control" },
-      "park": { "name": "Close arm" },
-      "stop": { "name": "Stop observation" },
-      "shutdown": { "name": "Shut down" },
-      "release_control": { "name": "Release control" },
-      "restart_autofocus": { "name": "Restart autofocus" }
+      "initialize": {
+        "name": "Initialize"
+      },
+      "observe": {
+        "name": "Observe"
+      },
+      "resume": {
+        "name": "Resume multi-night capture"
+      },
+      "take_control": {
+        "name": "Take control"
+      },
+      "park": {
+        "name": "Close arm"
+      },
+      "stop": {
+        "name": "Stop observation"
+      },
+      "shutdown": {
+        "name": "Shut down"
+      },
+      "release_control": {
+        "name": "Release control"
+      },
+      "restart_autofocus": {
+        "name": "Restart autofocus"
+      }
     },
     "select": {
-      "target": { "name": "Target" },
-      "balens_level": { "name": "BalENS level" },
-      "button_brightness": { "name": "Button brightness" }
+      "target": {
+        "name": "Target"
+      },
+      "balens_level": {
+        "name": "BalENS level"
+      },
+      "button_brightness": {
+        "name": "Button brightness"
+      }
     },
     "switch": {
-      "multi_light": { "name": "BalENS (HDR background)" },
-      "live_focus": { "name": "Live focus" },
-      "full_resolution": { "name": "Full resolution" },
-      "dithering": { "name": "Dithering" },
-      "dark_usage": { "name": "Use master dark" },
-      "mosaic": { "name": "Mosaic mode" },
-      "multi_night": { "name": "Multi-night mode" }
+      "multi_light": {
+        "name": "BalENS (HDR background)"
+      },
+      "live_focus": {
+        "name": "Live focus"
+      },
+      "full_resolution": {
+        "name": "Full resolution"
+      },
+      "dithering": {
+        "name": "Dithering"
+      },
+      "dark_usage": {
+        "name": "Use master dark"
+      },
+      "mosaic": {
+        "name": "Mosaic mode"
+      },
+      "multi_night": {
+        "name": "Multi-night mode"
+      }
     },
     "number": {
-      "mosaic_width": { "name": "Mosaic width" },
-      "mosaic_height": { "name": "Mosaic height" }
+      "mosaic_width": {
+        "name": "Mosaic width"
+      },
+      "mosaic_height": {
+        "name": "Mosaic height"
+      }
     }
   }
 }

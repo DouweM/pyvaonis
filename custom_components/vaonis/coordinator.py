@@ -68,6 +68,9 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         self.mosaic_width: float = 1.6
         self.mosaic_height: float = 1.1
         self.multi_night_enabled: bool = False
+        # Signature of an init failure the user has moved past (dismissed by taking the next action),
+        # so the "Initialization failed" state clears instead of lingering until a successful init.
+        self._init_failure_ack: str | None = None
 
     @property
     def model(self) -> str | None:
@@ -89,6 +92,25 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         if entry.state is ConfigEntryState.LOADED:
             self.hass.async_create_task(self.hass.config_entries.async_reload(entry.entry_id))
 
+    @property
+    def init_failure(self) -> str | None:
+        """Friendly reason the last auto-init failed (e.g. not enough stars), or None.
+
+        Surfaces ``previousOperations.autoInit.error`` (which the firmware leaves after a failed init,
+        and which the status headline would otherwise show as plain "Idle"). Clears once the user
+        takes the next action (Close arm, Initialize again, …) — see :meth:`_ack_init_failure`."""
+        failure = self.client.autoinit_failure()
+        if failure is None or failure[0] == self._init_failure_ack:
+            return None
+        return failure[1]
+
+    def _ack_init_failure(self) -> None:
+        """Dismiss the currently-shown init failure (called after any control action)."""
+        failure = self.client.autoinit_failure()
+        if failure and failure[0] != self._init_failure_ack:
+            self._init_failure_ack = failure[0]
+            self.async_update_listeners()
+
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""
         self.async_set_updated_data(status)
@@ -107,6 +129,7 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         finally:
             with contextlib.suppress(VaonisError):
                 await self.client.release_control()
+            self._ack_init_failure()  # taking any action moves past a prior init failure
 
     async def _async_update_data(self) -> VaonisStatus:
         """Connect (once), read-only; returns the current status. Control is taken on demand."""

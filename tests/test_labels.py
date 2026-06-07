@@ -68,3 +68,42 @@ def test_plan_summary_with_current_target() -> None:
 
 def test_park_label() -> None:
     assert summarize({"currentOperation": {"type": "PARK"}}) == "Close the arm"
+
+
+def test_autoinit_failure_not_enough_stars() -> None:
+    from pyvaonis.labels import autoinit_failure
+
+    raw = {
+        "initialized": False,
+        "currentOperation": None,
+        "previousOperations": {
+            "autoInit": {"id": "ai-1", "error": {"name": "GENERAL.ALL_ATTEMPTS_FAILED"}}
+        },
+    }
+    failure = autoinit_failure(raw)
+    assert failure is not None
+    signature, message = failure
+    assert signature == "ai-1"
+    assert "stars" in message
+    # Headline shows the failure instead of collapsing to "Idle".
+    assert summarize(raw) == "Idle"  # summarize itself stays raw; the sensor layer overlays failure
+
+
+def test_autoinit_failure_none_when_running_or_done() -> None:
+    from pyvaonis.labels import autoinit_failure
+
+    running = {"currentOperation": {"type": "AUTO_INIT", "stopped": False}}
+    assert autoinit_failure(running) is None
+    # A failed attempt but the scope is now initialized (a later init succeeded) → not a failure.
+    done = {
+        "initialized": True,
+        "previousOperations": {"autoInit": {"error": {"name": "GENERAL.ALL_ATTEMPTS_FAILED"}}},
+    }
+    assert autoinit_failure(done) is None
+    # User interruption is not flagged as a failure.
+    interrupted = {
+        "initialized": False,
+        "previousOperations": {"autoInit": {"error": {"name": "GENERAL.MANUAL_INTERRUPTION"}}},
+    }
+    assert autoinit_failure(interrupted) is None
+    assert autoinit_failure({}) is None
