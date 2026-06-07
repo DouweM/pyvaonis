@@ -9,6 +9,7 @@ app's browse-then-Observe flow.
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -17,6 +18,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import ExtraStoredData
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .coordinator import VaonisConfigEntry
@@ -62,6 +65,18 @@ MAX_OPTIONS = 25
 _NONE_OPTION = (
     "None"  # explicit "nothing chosen" entry at the top; not enough to start an observation
 )
+
+
+@dataclass
+class _TargetRestoreData(ExtraStoredData):
+    """Persist the chosen target (by catalog name) so it survives restarts/reloads."""
+
+    selected_target: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Serialise for HA's restore store."""
+        return {"selected_target": self.selected_target}
+
 
 # BalENS level: friendly labels are the select options; mapped back to wire values on set
 # (set_balens_level normalises "First Edition" -> OLD, etc.).
@@ -168,7 +183,7 @@ class VaonisBalensLevelSelect(VaonisEntity, SelectEntity):
             raise HomeAssistantError(str(err)) from err
 
 
-class VaonisTargetSelect(VaonisEntity, SelectEntity):
+class VaonisTargetSelect(VaonisEntity, SelectEntity, RestoreEntity):
     """Choose an observation target (curated, currently-up deep-sky objects + planets/Moon)."""
 
     _attr_translation_key = "target"
@@ -184,6 +199,24 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
         self._suggestions: list[dict[str, Any]] = []
         self._computed_at = 0.0  # monotonic time of the last (throttled) recompute
         self._refresh_options()
+
+    @property
+    def extra_restore_state_data(self) -> _TargetRestoreData:
+        """Persist the chosen target so it survives restarts/reloads."""
+        return _TargetRestoreData(self.coordinator.selected_target)
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the previously chosen target into the coordinator + the dropdown."""
+        await super().async_added_to_hass()
+        if self.coordinator.selected_target is None and (
+            last := await self.async_get_last_extra_data()
+        ):
+            target = last.as_dict().get("selected_target")
+            if target:
+                self.coordinator.selected_target = target
+                self._computed_at = 0.0  # force a recompute so current_option matches the restore
+                self._refresh_options()
+                self.async_write_ha_state()
 
     def _refresh_options(self) -> None:
         # Membership is "what's worth imaging *tonight*" — the curated (grade>=5) deep-sky + planets/
@@ -275,9 +308,7 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
 
     @property
     def available(self) -> bool:
-        """Available whenever not actively observing — picking the next target is local (HA's
-        location + the bundled catalog, stored on the coordinator), so it works even while the
-        telescope is offline; only the Observe button needs the connection."""
-        data = self.coordinator.data
-        busy = bool(data) and data.is_busy
-        return not busy and bool(self._attr_options)
+        """Always selectable — picking the *next* target is local (HA's location + the bundled
+        catalog, stored on the coordinator) and never touches the scope, so it works during init or
+        an observation and even while offline; only the Observe button needs idle + a connection."""
+        return bool(self._attr_options)

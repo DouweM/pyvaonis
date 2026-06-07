@@ -132,6 +132,13 @@ autoinit:
       default: false
       selector:
         boolean:
+    observatory_name:
+      name: Observatory name
+      description: >-
+        Site label the app shows ("from observatory: …"). Defaults to the telescope's existing name,
+        else "Home Assistant". Set it to (re)name the site, e.g. "Oasis".
+      selector:
+        text:
 
 adjust_framing:
   name: Change framing

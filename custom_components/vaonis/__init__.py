@@ -75,6 +75,9 @@ AUTOINIT_SCHEMA = vol.Schema(
         vol.Optional("latitude"): vol.Coerce(float),
         vol.Optional("longitude"): vol.Coerce(float),
         vol.Optional("skip_autofocus", default=False): bool,
+        # Site label the app shows ("from observatory: …"). Defaults to the scope's existing name,
+        # else "Home Assistant". Pass it to (re)set the name, e.g. "Oasis".
+        vol.Optional("observatory_name"): str,
     }
 )
 ADJUST_FRAMING_SCHEMA = vol.Schema(
@@ -329,7 +332,12 @@ def _register_services(hass: HomeAssistant) -> None:
         coordinator = _first_coordinator()
         lat, lon = _resolve_location(coordinator, call)
         await coordinator.run_action(
-            lambda c: c.start_autoinit(lat, lon, skip_auto_focus=call.data["skip_autofocus"])
+            lambda c: c.start_autoinit(
+                lat,
+                lon,
+                skip_auto_focus=call.data["skip_autofocus"],
+                observatory_name=call.data.get("observatory_name"),
+            )
         )
 
     async def adjust_framing(call: ServiceCall) -> None:

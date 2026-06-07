@@ -484,7 +484,7 @@ class VaonisClient:
             longitude=longitude,
             time=int(time.time() * 1000),
             skip_auto_focus=skip_auto_focus,
-            observatory_name=observatory_name or self.observatory_name() or "Home Assistant",
+            observatory_name=self._observatory_label(observatory_name),
         )
         return await self.post(const.Endpoint.START_AUTOINIT, body.model_dump(by_alias=True))
 
@@ -659,7 +659,7 @@ class VaonisClient:
             longitude=longitude,
             device_id=self.device_id,
             start_time=start_time,
-            observatory_name=self.observatory_name() or "Home Assistant",
+            observatory_name=self._observatory_label(),
             allow_solar=allow_solar,
         )
         return await self.post(const.Endpoint.START_PLAN, body.to_payload())
@@ -683,6 +683,15 @@ class VaonisClient:
             if isinstance(op, dict) and (name := op.get("observatoryName")):
                 return name
         return None
+
+    def _observatory_label(self, override: str | None = None) -> str:
+        """The site name to send with init/plan: caller override, else the scope's existing name,
+        else "Home Assistant" — ignoring the library's old "pyvaonis" default if it still lingers on
+        the scope (a previous init may have written it), so we don't keep perpetuating it."""
+        existing = self.observatory_name()
+        if existing == "pyvaonis":
+            existing = None
+        return override or existing or "Home Assistant"
 
     def plan_progress(self) -> Any:
         """Parsed progress of the running native plan, or None when no plan is active."""
