@@ -275,8 +275,9 @@ class VaonisTargetSelect(VaonisEntity, SelectEntity):
 
     @property
     def available(self) -> bool:
-        """Available when idle with targets to offer (you pick the next observation)."""
-        if not super().available:
-            return False
-        idle = bool(self.coordinator.data) and not self.coordinator.data.is_busy
-        return idle and bool(self._attr_options)
+        """Available whenever not actively observing — picking the next target is local (HA's
+        location + the bundled catalog, stored on the coordinator), so it works even while the
+        telescope is offline; only the Observe button needs the connection."""
+        data = self.coordinator.data
+        busy = bool(data) and data.is_busy
+        return not busy and bool(self._attr_options)

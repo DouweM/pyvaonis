@@ -61,8 +61,9 @@ async def async_setup_entry(
             "mdi:grid",
             lambda c: c.mosaic_enabled,
             lambda c, v: setattr(c, "mosaic_enabled", v),
-            # Mosaic only applies to a *new* observation (set at start) — disable while busy.
-            available_fn=lambda c: bool(c.data) and not c.data.is_busy,
+            # Mosaic only applies to a *new* observation (set at start) — disable while busy, but it's
+            # a local choice so it stays settable while the scope is offline (when it's not busy).
+            available_fn=lambda c: not (c.data and c.data.is_busy),
         )
     )
     entities.append(VaonisMultiNightSwitch(coordinator))
@@ -134,9 +135,8 @@ class VaonisOptionSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
 
     @property
     def available(self) -> bool:
-        """Greyed out when the option can't take effect right now."""
-        if not super().available:
-            return False
+        """A local choice (not a device setting), so it works even while the scope is offline — only
+        greyed out when it can't take effect (e.g. mosaic can't change mid-observation)."""
         return self._available_fn is None or self._available_fn(self.coordinator)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -172,6 +172,12 @@ class VaonisMultiNightSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         if (last := await self.async_get_last_state()) is not None:
             self.coordinator.multi_night_enabled = last.state == "on"
+
+    @property
+    def available(self) -> bool:
+        """The next-observation choice is local, so it stays settable while offline; the live
+        'mark the running capture resumable' path only runs when there's an observation (online)."""
+        return True
 
     @property
     def is_on(self) -> bool:

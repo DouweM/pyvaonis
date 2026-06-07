@@ -95,9 +95,10 @@ class VaonisNumber(VaonisEntity, RestoreNumber):
 
     @property
     def available(self) -> bool:
-        """Greyed out while busy — mosaic size only applies to a new observation (set at start)."""
+        """Greyed out only while busy — mosaic size applies to a new observation (set at start). It's
+        a local input the Observe button reads, so it stays settable while the scope is offline."""
         data = self.coordinator.data
-        return super().available and bool(data) and not data.is_busy
+        return not (data and data.is_busy)
 
     async def async_set_native_value(self, value: float) -> None:
         """Store the new field size (used by the Observe button when Mosaic is on)."""
