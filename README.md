@@ -350,7 +350,7 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 **Entities & services** (device shows model + firmware version):
 - Sensors: **Status** — a one-line human summary in the app's own wording ("M104: 180 stacked
   (30m)", "Initialization: Star pattern analysis (50%)", "tonight — Observation in progress (M51,
-  2/5)", "Initialization failed: not enough stars", or "Disconnected" when offline), plus
+  2/5)", "Initialization failed: Not enough stars", or "Disconnected" when offline), plus
   **initialization step**, current operation / **target** / **step**, **stacked
   frames** + **total** + **frames acquired** (so you can see the accept/reject ratio),
   **integration time**, **gain**, **exposure**, **latest target** (the object shown in *Latest image*,

@@ -63,9 +63,10 @@ AUTOINIT_ERROR_LABELS: dict[str, str] = {
     "GENERAL.AUTO_FOCUS_FAILED": "Autofocus failed during initialization",
 }
 # Terse version for the one-line status headline (the full text above would make it unwieldy).
+# Capitalised to match the other post-colon status bits (e.g. "Initialization: Star pattern analysis").
 AUTOINIT_ERROR_SHORT: dict[str, str] = {
-    "GENERAL.ALL_ATTEMPTS_FAILED": "not enough stars",
-    "GENERAL.AUTO_FOCUS_FAILED": "autofocus failed",
+    "GENERAL.ALL_ATTEMPTS_FAILED": "Not enough stars",
+    "GENERAL.AUTO_FOCUS_FAILED": "Autofocus failed",
 }
 
 # StellinaOperationType -> banner label (instrument_* / *_title).
