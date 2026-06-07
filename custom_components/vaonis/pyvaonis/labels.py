@@ -136,28 +136,33 @@ def autoinit_step_label(raw: dict[str, Any] | None) -> str | None:
 def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str | None, str] | None:
     """The last auto-init failure as ``(signature, short, detail)``, or None if it didn't fail.
 
-    When init fails (e.g. not enough stars) the firmware clears ``currentOperation`` and leaves the
-    attempt in ``previousOperations.autoInit`` with a non-null ``error``, while ``initialized`` stays
-    false. We surface that (which the status headline would otherwise show as plain "Idle"). ``short``
-    is a terse reason for the one-line status (None when unrecognised); ``detail`` is the full message.
-    ``signature`` (the attempt's id/endTime) lets callers dismiss one specific failure. Returns None
-    while an init is running, after a successful init, once initialized, or for a user interruption.
+    When init fails (e.g. not enough stars) the firmware first *stops* the ``currentOperation`` (which
+    already carries the ``error``), then a moment later moves it into ``previousOperations.autoInit``;
+    ``initialized`` stays false throughout. We read the error from whichever holds it — the stopped
+    current op (caught the instant it fails) or the archived one — so we don't lag behind the move.
+    ``short`` is a terse reason for the one-line status (None when unrecognised); ``detail`` is the
+    full message. ``signature`` (the attempt's id/endTime) lets callers dismiss one specific failure.
+    Returns None while an init is running, after a successful init, once initialized, or for a user
+    interruption.
     """
     if not raw or raw.get("initialized") is True:
         return None
     cur = raw.get("currentOperation")
-    if isinstance(cur, dict) and cur.get("type") == "AUTO_INIT" and not cur.get("stopped"):
-        return None  # an init is currently in progress
-    prev = (raw.get("previousOperations") or {}).get("autoInit")
-    if not isinstance(prev, dict) or not isinstance(prev.get("error"), dict):
+    if isinstance(cur, dict) and cur.get("type") == "AUTO_INIT":
+        if not cur.get("stopped"):
+            return None  # an init is currently in progress
+        op = cur  # a stopped auto-init already carries the error — catch it before it's archived
+    else:
+        op = (raw.get("previousOperations") or {}).get("autoInit")
+    if not isinstance(op, dict) or not isinstance(op.get("error"), dict):
         return None
-    name = prev["error"].get("name") or ""
+    name = op["error"].get("name") or ""
     if name == "GENERAL.MANUAL_INTERRUPTION":  # the user stopped it — not a failure to flag
         return None
     detail = (
-        AUTOINIT_ERROR_LABELS.get(name) or prev["error"].get("rawError") or "Initialization failed"
+        AUTOINIT_ERROR_LABELS.get(name) or op["error"].get("rawError") or "Initialization failed"
     )
-    signature = str(prev.get("id") or prev.get("endTime") or name or "failed")
+    signature = str(op.get("id") or op.get("endTime") or name or "failed")
     return signature, AUTOINIT_ERROR_SHORT.get(name), detail
 
 

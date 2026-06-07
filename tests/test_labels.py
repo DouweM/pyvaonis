@@ -115,6 +115,25 @@ def test_autoinit_failure_not_enough_stars() -> None:
     assert summarize(raw) == "Not initialized"
 
 
+def test_autoinit_failure_on_stopped_current_op() -> None:
+    from pyvaonis.labels import autoinit_failure
+
+    # Caught the instant the auto-init op stops with an error, before it moves to previousOperations.
+    raw = {
+        "initialized": False,
+        "currentOperation": {
+            "type": "AUTO_INIT",
+            "stopped": True,
+            "id": "ai-2",
+            "error": {"name": "GENERAL.ALL_ATTEMPTS_FAILED"},
+        },
+    }
+    failure = autoinit_failure(raw)
+    assert failure is not None
+    assert failure[0] == "ai-2"
+    assert failure[1] == "Not enough stars"
+
+
 def test_autoinit_failure_none_when_running_or_done() -> None:
     from pyvaonis.labels import autoinit_failure
 
