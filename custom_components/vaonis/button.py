@@ -152,8 +152,11 @@ class VaonisInitializeButton(VaonisEntity, ButtonEntity):
         scope = self.coordinator.client.location()
         lat = scope[0] if scope else self.hass.config.latitude
         lon = scope[1] if scope else self.hass.config.longitude
+        fallback = self.hass.config.location_name or None  # name the site after the HA instance
         try:
-            await self.coordinator.run_action(lambda c: c.start_autoinit(lat, lon))
+            await self.coordinator.run_action(
+                lambda c: c.start_autoinit(lat, lon, fallback_name=fallback)
+            )
         except VaonisError as err:
             raise HomeAssistantError(str(err)) from err
 

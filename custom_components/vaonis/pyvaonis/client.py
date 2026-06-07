@@ -469,12 +469,13 @@ class VaonisClient:
         *,
         skip_auto_focus: bool = False,
         observatory_name: str | None = None,
+        fallback_name: str | None = None,
     ) -> dict[str, Any]:
         """Initialise/align the telescope at a location.
 
         ``observatory_name`` is the site label the app shows ("from observatory: …"); auto-init is the
         call that sets it. Defaults to the scope's existing observatory name so a re-init keeps it
-        (e.g. "Oasis"), and otherwise to "Home Assistant" rather than the library's bare default.
+        (e.g. "Oasis"), then ``fallback_name`` (e.g. the HA instance name), then "Home Assistant".
         """
         if not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
             raise VaonisCommandError(f"latitude/longitude out of range: {latitude},{longitude}")
@@ -484,7 +485,7 @@ class VaonisClient:
             longitude=longitude,
             time=int(time.time() * 1000),
             skip_auto_focus=skip_auto_focus,
-            observatory_name=self._observatory_label(observatory_name),
+            observatory_name=self._observatory_label(observatory_name, fallback_name),
         )
         return await self.post(const.Endpoint.START_AUTOINIT, body.model_dump(by_alias=True))
 
@@ -641,6 +642,7 @@ class VaonisClient:
         longitude: float,
         start_time: Any | None = None,
         allow_solar: bool = False,
+        fallback_name: str | None = None,
     ) -> dict[str, Any]:
         """Upload and start the telescope's native autonomous plan (``planner/startPlan``).
 
@@ -659,7 +661,7 @@ class VaonisClient:
             longitude=longitude,
             device_id=self.device_id,
             start_time=start_time,
-            observatory_name=self._observatory_label(),
+            observatory_name=self._observatory_label(fallback=fallback_name),
             allow_solar=allow_solar,
         )
         return await self.post(const.Endpoint.START_PLAN, body.to_payload())
@@ -684,14 +686,15 @@ class VaonisClient:
                 return name
         return None
 
-    def _observatory_label(self, override: str | None = None) -> str:
-        """The site name to send with init/plan: caller override, else the scope's existing name,
-        else "Home Assistant" — ignoring the library's old "pyvaonis" default if it still lingers on
+    def _observatory_label(self, override: str | None = None, fallback: str | None = None) -> str:
+        """The site name to send with init/plan, in priority order: explicit ``override``, the scope's
+        existing name, the caller's ``fallback`` (e.g. the Home Assistant instance name), then the
+        literal "Home Assistant". Ignores the library's old "pyvaonis" default if it still lingers on
         the scope (a previous init may have written it), so we don't keep perpetuating it."""
         existing = self.observatory_name()
         if existing == "pyvaonis":
             existing = None
-        return override or existing or "Home Assistant"
+        return override or existing or fallback or "Home Assistant"
 
     def plan_progress(self) -> Any:
         """Parsed progress of the running native plan, or None when no plan is active."""

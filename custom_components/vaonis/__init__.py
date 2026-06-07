@@ -251,6 +251,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 latitude=lat,
                 longitude=lon,
                 start_time=start_time,
+                fallback_name=hass.config.location_name or None,
             )
         )
         return {"started": True, "targets": call.data["targets"]}
@@ -337,6 +338,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 lon,
                 skip_auto_focus=call.data["skip_autofocus"],
                 observatory_name=call.data.get("observatory_name"),
+                fallback_name=hass.config.location_name or None,
             )
         )
 
