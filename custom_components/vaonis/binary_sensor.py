@@ -138,6 +138,12 @@ class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
         self._hass = hass
 
     @property
+    def available(self) -> bool:
+        """Always available — darkness is computed from HA's location/clock, not the telescope, so
+        it stays useful (e.g. for planning) even while the scope is disconnected."""
+        return True
+
+    @property
     def is_on(self) -> bool:
         """True when observing is possible (it is dark)."""
         from .pyvaonis import is_dark

@@ -181,9 +181,13 @@ class VaonisInitializeButton(VaonisEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Available only when idle (no operation running)."""
+        """Available only when idle and dark enough — auto-init needs stars to plate-solve, so it
+        just fails (no result, and a slew that could sweep near the Sun) in daylight."""
         return (
-            super().available and bool(self.coordinator.data) and not self.coordinator.data.is_busy
+            super().available
+            and bool(self.coordinator.data)
+            and not self.coordinator.data.is_busy
+            and is_dark(self.hass.config.latitude, self.hass.config.longitude)
         )
 
 

@@ -34,6 +34,9 @@ class VaonisSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[VaonisCoordinator], Any]
     available_fn: Callable[[VaonisCoordinator], bool] | None = None
+    # Stay available even when the telescope is unreachable, so the sensor can report the disconnect
+    # itself (as its value) rather than going Unavailable along with everything else.
+    always_available: bool = False
 
 
 def _observing(coordinator: VaonisCoordinator) -> bool:
@@ -174,6 +177,8 @@ def _plan_target(coordinator: VaonisCoordinator) -> Any:
 
 
 def _status_summary(coordinator: VaonisCoordinator) -> Any:
+    if not coordinator.client.connected:  # mirror the Connectivity sensor: report it, don't hide
+        return "Disconnected"
     return coordinator.client.status_summary()
 
 
@@ -203,6 +208,7 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         translation_key="status",
         icon="mdi:telescope",
         value_fn=_status_summary,
+        always_available=True,
     ),
     VaonisSensorDescription(
         # Primary (not diagnostic): the initialization phase is part of the core observing flow.
@@ -410,8 +416,9 @@ class VaonisSensor(VaonisEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Unavailable (rather than 'Unknown') when the value doesn't apply right now."""
-        if not super().available:
+        """Unavailable (rather than 'Unknown') when the value doesn't apply right now — unless the
+        sensor is marked always-available (it reports the disconnect as its own value)."""
+        if not self.entity_description.always_available and not super().available:
             return False
         available_fn = self.entity_description.available_fn
         return available_fn is None or available_fn(self.coordinator)
