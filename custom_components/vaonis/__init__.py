@@ -114,7 +114,12 @@ RUN_PLAN_SCHEMA = vol.Schema(
 async def async_setup_entry(hass: HomeAssistant, entry: VaonisConfigEntry) -> bool:
     """Set up Stellina from a config entry."""
     coordinator = VaonisCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+    # Don't abort setup if the telescope is unreachable. async_refresh() connects read-only but, on
+    # failure, leaves the entry loaded (unlike async_config_entry_first_refresh, which raises
+    # ConfigEntryNotReady and tears everything down). That keeps the offline-capable entities — the
+    # Target/Dark/Mosaic/Multi-night controls and the cached Latest image/target — available, and the
+    # 30s watchdog reconnects in the background once the scope is powered on / back in range.
+    await coordinator.async_refresh()
 
     # Name the entry after the telescope itself (the app's telescopeName, e.g. "Stellina"), so the
     # integration + media browser show that rather than the generic default.
