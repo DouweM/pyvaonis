@@ -81,6 +81,12 @@ def test_park_label() -> None:
     assert summarize({"currentOperation": {"type": "PARK"}}) == "Closing arm"
 
 
+def test_shutting_down() -> None:
+    assert summarize({"shuttingDown": True}) == "Shutting down"
+    # Takes precedence over the idle/operation wording.
+    assert summarize({"shuttingDown": True, "initialized": False}) == "Shutting down"
+
+
 def test_sun_mode_state() -> None:
     assert summarize({"currentOperation": {"type": "SUN_MODE"}}) == "Solar mode"
     assert (

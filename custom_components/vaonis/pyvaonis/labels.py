@@ -163,6 +163,8 @@ def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str | None, str] 
 
 def summarize(raw: dict[str, Any] | None) -> str:
     """One-line "what is the scope doing right now", in the app's wording."""
+    if raw and raw.get("shuttingDown"):
+        return "Shutting down"
     op = raw.get("currentOperation") if raw else None
     if not isinstance(op, dict) or op.get("stopped"):
         # No operation running: the scope is either ready ("Idle") or hasn't been aligned yet
