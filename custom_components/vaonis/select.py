@@ -81,7 +81,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the target select (+ BalENS level / button brightness where the model supports them)."""
     coordinator = entry.runtime_data
-    model = coordinator.data.model if coordinator.data else None
+    model = coordinator.model
     selects: list[SelectEntity] = [VaonisTargetSelect(coordinator, hass)]
     if model_supports(model, "HDR_BACKGROUND"):  # BalENS is Vespera-Pro-only
         selects.append(VaonisBalensLevelSelect(coordinator))

@@ -17,12 +17,14 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import CONF_HOST
+from .const import CONF_MODEL
 from .const import DOMAIN
 from .pyvaonis import VaonisClient
 from .pyvaonis import VaonisError
@@ -67,9 +69,30 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         self.mosaic_height: float = 1.1
         self.multi_night_enabled: bool = False
 
+    @property
+    def model(self) -> str | None:
+        """The telescope model — live status when connected, else the value remembered in the config
+        entry (so capability gating + the device model stay correct across an offline load)."""
+        if self.data and self.data.model:
+            return self.data.model
+        return self.config_entry.data.get(CONF_MODEL) if self.config_entry else None
+
+    def _remember_model(self, status: VaonisStatus) -> None:
+        """Persist the learned model on the config entry so it's known on the next offline load."""
+        model = status.model
+        entry = self.config_entry
+        if not model or not entry or entry.data.get(CONF_MODEL) == model:
+            return
+        self.hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_MODEL: model})
+        # If the entry was already loaded with a different/absent model (e.g. an offline load that
+        # created the permissive entity set), reload so capability gating re-runs for the real model.
+        if entry.state is ConfigEntryState.LOADED:
+            self.hass.async_create_task(self.hass.config_entries.async_reload(entry.entry_id))
+
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""
         self.async_set_updated_data(status)
+        self._remember_model(status)
 
     async def run_action(self, action: Callable[[VaonisClient], Awaitable[Any]]) -> Any:
         """One-shot control: take control, run ``action``, then release it (HA never holds control).
@@ -89,7 +112,9 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         """Connect (once), read-only; returns the current status. Control is taken on demand."""
         try:
             if not self.client.connected:
-                return await self.client.connect()
+                status = await self.client.connect()
+                self._remember_model(status)
+                return status
         except VaonisError as err:
             raise UpdateFailed(str(err)) from err
         if self.data is None:  # pragma: no cover - defensive

@@ -47,7 +47,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the supported device-setting switches + the Mosaic / Multi-night observe toggles."""
     coordinator = entry.runtime_data
-    model = coordinator.data.model if coordinator.data else None
+    model = coordinator.model
     entities: list[SwitchEntity] = [
         VaonisSettingSwitch(coordinator, s)
         for s in _SETTING_SWITCHES

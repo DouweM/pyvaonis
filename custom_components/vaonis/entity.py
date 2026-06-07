@@ -9,7 +9,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .const import MANUFACTURER
-from .const import MODEL
 from .coordinator import VaonisCoordinator
 
 
@@ -37,11 +36,14 @@ class VaonisEntity(CoordinatorEntity[VaonisCoordinator]):
         from .pyvaonis import model_display_name
 
         status = self.coordinator.data
-        model = model_display_name(status.model if status else None)
-        name = MODEL
+        model = model_display_name(self.coordinator.model)
+        # Offline we have no live telescopeName, so fall back to the entry title (the name learned on
+        # a previous online setup) and then the model — never the generic placeholder.
+        entry = self.coordinator.config_entry
+        name = (entry.title if entry else None) or model
         sw_version = None
         if status:
-            name = (status.raw.get("settings") or {}).get("telescopeName") or model
+            name = (status.raw.get("settings") or {}).get("telescopeName") or name
             sw_version = status.raw.get("version")
         return DeviceInfo(
             identifiers={(DOMAIN, self._telescope_id)},
