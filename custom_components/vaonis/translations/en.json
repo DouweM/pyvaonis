@@ -92,9 +92,6 @@
       "initialized": {
         "name": "Initialized"
       },
-      "has_control": {
-        "name": "Has control"
-      },
       "dark": {
         "name": "Dark enough to observe"
       },
@@ -121,9 +118,6 @@
       "resume": {
         "name": "Resume multi-night capture"
       },
-      "take_control": {
-        "name": "Take control"
-      },
       "park": {
         "name": "Close arm"
       },
@@ -132,9 +126,6 @@
       },
       "shutdown": {
         "name": "Shut down"
-      },
-      "release_control": {
-        "name": "Release control"
       },
       "restart_autofocus": {
         "name": "Restart autofocus"
@@ -172,6 +163,9 @@
       },
       "multi_night": {
         "name": "Multi-night mode"
+      },
+      "control": {
+        "name": "Control"
       }
     },
     "number": {

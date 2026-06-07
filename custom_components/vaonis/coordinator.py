@@ -92,9 +92,8 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         if entry.state is ConfigEntryState.LOADED:
             self.hass.async_create_task(self.hass.config_entries.async_reload(entry.entry_id))
 
-    @property
-    def init_failure(self) -> str | None:
-        """Friendly reason the last auto-init failed (e.g. not enough stars), or None.
+    def _active_init_failure(self) -> tuple[str | None, str] | None:
+        """The current (unacknowledged) init failure as ``(short, detail)``, or None.
 
         Surfaces ``previousOperations.autoInit.error`` (which the firmware leaves after a failed init,
         and which the status headline would otherwise show as plain "Idle"). Clears once the user
@@ -102,7 +101,21 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         failure = self.client.autoinit_failure()
         if failure is None or failure[0] == self._init_failure_ack:
             return None
-        return failure[1]
+        return failure[1], failure[2]  # (short, detail)
+
+    @property
+    def init_failure(self) -> str | None:
+        """Full reason the last auto-init failed (e.g. not enough stars), or None."""
+        active = self._active_init_failure()
+        return active[1] if active else None
+
+    @property
+    def init_failure_summary(self) -> str | None:
+        """One-line headline for the Status sensor (terse reason), or None when no failure."""
+        active = self._active_init_failure()
+        if active is None:
+            return None
+        return f"Initialization failed: {active[0]}" if active[0] else "Initialization failed"
 
     def _ack_init_failure(self) -> None:
         """Dismiss the currently-shown init failure (called after any control action)."""

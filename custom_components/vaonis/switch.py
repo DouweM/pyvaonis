@@ -9,12 +9,14 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
 from .entity import VaonisEntity
+from .pyvaonis import VaonisError
 from .pyvaonis.const import model_supports
 
 
@@ -67,6 +69,7 @@ async def async_setup_entry(
         )
     )
     entities.append(VaonisMultiNightSwitch(coordinator))
+    entities.append(VaonisControlSwitch(coordinator))
     async_add_entities(entities)
 
 
@@ -200,4 +203,43 @@ class VaonisMultiNightSwitch(VaonisEntity, SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Clear the choice for the next observation (a running capture stays as-is)."""
         self.coordinator.multi_night_enabled = False
+        self.async_write_ha_state()
+
+
+class VaonisControlSwitch(VaonisEntity, SwitchEntity):
+    """Whether Home Assistant holds control of the telescope (one switch for take/release/state).
+
+    HA normally takes control only for the moment an action needs it (then releases, so the phone app
+    can resume); this switch is the manual override — turn it on to grab and hold control (locking out
+    the app), off to release. ``is_on`` reflects the live ``has_control``. Turning it on while another
+    device is master will be refused by the firmware (surfaced as an error).
+    """
+
+    _attr_translation_key = "control"
+    _attr_icon = "mdi:remote"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: VaonisCoordinator) -> None:
+        """Initialise the control switch."""
+        super().__init__(coordinator, "control")
+
+    @property
+    def is_on(self) -> bool:
+        """Whether HA currently holds control (a definite bool)."""
+        return self.coordinator.client.has_control
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Take and hold control."""
+        try:
+            await self.coordinator.client.take_control()
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Release control (the app can take over again)."""
+        try:
+            await self.coordinator.client.release_control()
+        except VaonisError as err:
+            raise HomeAssistantError(str(err)) from err
         self.async_write_ha_state()

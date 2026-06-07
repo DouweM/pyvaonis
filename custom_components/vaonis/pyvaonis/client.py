@@ -704,8 +704,8 @@ class VaonisClient:
 
         return labels.autoinit_step_label(self.status.raw) if self.status else None
 
-    def autoinit_failure(self) -> tuple[str, str] | None:
-        """The last auto-init failure as ``(signature, message)``, or None — see labels.autoinit_failure."""
+    def autoinit_failure(self) -> tuple[str, str | None, str] | None:
+        """Last auto-init failure as ``(signature, short, detail)``, or None — see labels.autoinit_failure."""
         from . import labels
 
         return labels.autoinit_failure(self.status.raw if self.status else None)

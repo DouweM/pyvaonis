@@ -43,13 +43,6 @@ BINARY_SENSORS: tuple[VaonisBinaryDescription, ...] = (
         value_fn=lambda c: c.data.initialized if c.data else None,
     ),
     VaonisBinaryDescription(
-        key="has_control",
-        translation_key="has_control",
-        icon="mdi:remote",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda c: c.client.has_control,
-    ),
-    VaonisBinaryDescription(
         key="tracking",
         translation_key="tracking",
         icon="mdi:radar",

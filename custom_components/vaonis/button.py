@@ -41,11 +41,6 @@ def _idle(c: VaonisCoordinator) -> bool:
     return bool(c.data) and not c.data.is_busy
 
 
-def _nobody_in_control(c: VaonisCoordinator) -> bool:
-    """No device currently holds master (the app's ``masterDeviceId == null``)."""
-    return bool(c.data) and not c.data.master_device_id
-
-
 def _is_parked(c: VaonisCoordinator) -> bool:
     """Whether the arm is parked/closed (the app's ``isParked`` over the ALT motor)."""
     motors = (c.data.raw.get("motors") if c.data else None) or {}
@@ -54,15 +49,6 @@ def _is_parked(c: VaonisCoordinator) -> bool:
 
 
 BUTTONS: tuple[VaonisButtonDescription, ...] = (
-    VaonisButtonDescription(
-        key="take_control",
-        translation_key="take_control",
-        icon="mdi:remote",
-        press_fn=lambda client: client.take_control(),
-        takes_control=False,
-        # App gate: take control only when nobody holds it (can't steal a master device).
-        available_fn=_nobody_in_control,
-    ),
     VaonisButtonDescription(
         key="park",
         translation_key="park",
@@ -84,14 +70,6 @@ BUTTONS: tuple[VaonisButtonDescription, ...] = (
         translation_key="shutdown",
         icon="mdi:power",
         press_fn=lambda client: client.request_shutdown(),
-    ),
-    VaonisButtonDescription(
-        key="release_control",
-        translation_key="release_control",
-        icon="mdi:remote-off",
-        press_fn=lambda client: client.release_control(),
-        takes_control=False,
-        available_fn=lambda c: c.client.has_control,
     ),
     VaonisButtonDescription(
         key="restart_autofocus",

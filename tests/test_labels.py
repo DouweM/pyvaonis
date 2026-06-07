@@ -82,9 +82,10 @@ def test_autoinit_failure_not_enough_stars() -> None:
     }
     failure = autoinit_failure(raw)
     assert failure is not None
-    signature, message = failure
+    signature, short, detail = failure
     assert signature == "ai-1"
-    assert "stars" in message
+    assert short == "not enough stars"
+    assert "stars" in detail
     # Headline shows the failure instead of collapsing to "Idle".
     assert summarize(raw) == "Idle"  # summarize itself stays raw; the sensor layer overlays failure
 

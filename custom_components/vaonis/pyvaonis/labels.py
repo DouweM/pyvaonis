@@ -62,6 +62,11 @@ AUTOINIT_ERROR_LABELS: dict[str, str] = {
     ),
     "GENERAL.AUTO_FOCUS_FAILED": "Autofocus failed during initialization",
 }
+# Terse version for the one-line status headline (the full text above would make it unwieldy).
+AUTOINIT_ERROR_SHORT: dict[str, str] = {
+    "GENERAL.ALL_ATTEMPTS_FAILED": "not enough stars",
+    "GENERAL.AUTO_FOCUS_FAILED": "autofocus failed",
+}
 
 # StellinaOperationType -> banner label (instrument_* / *_title).
 OPERATION_TYPE_LABELS: dict[str, str] = {
@@ -114,12 +119,13 @@ def autoinit_step_label(raw: dict[str, Any] | None) -> str | None:
     return label + _pct(progress)
 
 
-def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str] | None:
-    """The last auto-init failure as ``(signature, message)``, or None if it didn't fail.
+def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str | None, str] | None:
+    """The last auto-init failure as ``(signature, short, detail)``, or None if it didn't fail.
 
     When init fails (e.g. not enough stars) the firmware clears ``currentOperation`` and leaves the
     attempt in ``previousOperations.autoInit`` with a non-null ``error``, while ``initialized`` stays
-    false. We surface that (which the status headline would otherwise show as plain "Idle"). The
+    false. We surface that (which the status headline would otherwise show as plain "Idle"). ``short``
+    is a terse reason for the one-line status (None when unrecognised); ``detail`` is the full message.
     ``signature`` (the attempt's id/endTime) lets callers dismiss one specific failure. Returns None
     while an init is running, after a successful init, once initialized, or for a user interruption.
     """
@@ -134,11 +140,11 @@ def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str] | None:
     name = prev["error"].get("name") or ""
     if name == "GENERAL.MANUAL_INTERRUPTION":  # the user stopped it — not a failure to flag
         return None
-    message = (
+    detail = (
         AUTOINIT_ERROR_LABELS.get(name) or prev["error"].get("rawError") or "Initialization failed"
     )
     signature = str(prev.get("id") or prev.get("endTime") or name or "failed")
-    return signature, message
+    return signature, AUTOINIT_ERROR_SHORT.get(name), detail
 
 
 def summarize(raw: dict[str, Any] | None) -> str:

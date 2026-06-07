@@ -179,8 +179,10 @@ def _plan_target(coordinator: VaonisCoordinator) -> Any:
 def _status_summary(coordinator: VaonisCoordinator) -> Any:
     if not coordinator.client.connected:  # mirror the Connectivity sensor: report it, don't hide
         return "Disconnected"
-    if coordinator.init_failure:  # don't collapse a failed init to "Idle" (firmware clears the op)
-        return "Initialization failed"
+    # Don't collapse a failed init to "Idle" (the firmware clears the op); show the terse reason here,
+    # the full text lives on the "Initialization failed" binary sensor.
+    if summary := coordinator.init_failure_summary:
+        return summary
     return coordinator.client.status_summary()
 
 

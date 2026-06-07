@@ -350,31 +350,37 @@ installs are `pynacl` and `ephem` (aiohttp/pydantic already ship with HA core).
 **Entities & services** (device shows model + firmware version):
 - Sensors: **Status** — a one-line human summary in the app's own wording ("M104: 180 stacked
   (30m)", "Initialization: Star pattern analysis (50%)", "tonight — Observation in progress (M51,
-  2/5)"), plus **initialization step**, current operation / **target** / **step**, **stacked
+  2/5)", "Initialization failed: not enough stars", or "Disconnected" when offline), plus
+  **initialization step**, current operation / **target** / **step**, **stacked
   frames** + **total** + **frames acquired** (so you can see the accept/reject ratio),
   **integration time**, **gain**, **exposure**, **latest target** (the object shown in *Latest image*,
   to caption it), **plan state** + **plan target** (during a native plan), **temperature**, **humidity**, **dew-point
   depression**, **storage free**, **Wi-Fi band**, **filter**, **autofocus temperature**,
   **controlling device**.
-- Binary sensors: connected, initialised, has control, **dark enough to observe** (with
-  `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**.
+- Binary sensors: connected, initialised, **dark enough to observe** (with
+  `sun_altitude`/`dark_start`/`dark_end`), **tracking**, **defog active**, **firmware update available**,
+  **initialization failed** (a `problem` sensor carrying the firmware's reason, e.g. "not enough stars";
+  clears on the next action). The connectivity and dark sensors stay available even while the scope is
+  offline (darkness is computed from HA's own location/clock).
 - Buttons: **initialize** (one-tap auto-init/align — the start of the flow), **observe** (start the
-  target picked in the select), **resume** (continue the newest saved multi-night capture), take
-  control, **release control**, park, stop, **restart autofocus**, **enable multi-night**, shut down.
-  Each is **disabled when it doesn't apply**, mirroring the app's own gates (take control only when
-  nobody holds it, release only when HA does, initialize/park only when idle, observe only when idle +
-  initialized + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
-  restart-autofocus/enable-multi-night only while observing). HA identifies itself to the telescope as
-  **"Home Assistant"** (shown in the Singularity app's connected-devices list and *Controlling device*).
+  target picked in the select), **resume** (continue the newest saved multi-night capture), park, stop,
+  **restart autofocus**, shut down. Each is **disabled when it doesn't apply**, mirroring the app's own
+  gates (initialize only when idle + dark, park only when idle, observe only when idle + initialized +
+  dark + a target is chosen, resume only when idle + initialized + a capture is saved, stop/
+  restart-autofocus only while observing). HA identifies itself to the telescope as **"Home Assistant"**
+  (shown in the Singularity app's connected-devices list and *Controlling device*), and **holding
+  control** is a single **Control** switch (on = HA holds it, locking out the app; off = released).
 - Select: **Target** — what's worth imaging **tonight** (peak altitude over tonight's dark window, so
   it's useful even when picked in daylight), curated (grade ≥ 5 deep-sky above 15° + planets/Moon; the
-  Sun is never offered), best first. Each option bakes in the planning info: **name · ↑peak° at <time>
-  · type · magnitude · recommended-minutes** (e.g. *"Orion Nebula · ↑65° at 23:40 · Emission nebula ·
-  mag 5.0 · 20 min"*) — HA's select shows only the option string, so we use the *peak* (stable through
-  the night) rather than the live altitude (which would churn). Selecting only *picks* the target (no
-  slew) — press **Observe** to start it; selectable day or night while idle, but **Observe** stays
-  disabled until it's dark (Sun ≤ −10°). The `suggestions` attribute carries the full per-target
-  breakdown (peak altitude + time, visibility, up-now, grade, constellation, …) for a custom card.
+  Sun is never offered). Ordered **best to shoot right now first** (well-placed-now targets float up
+  once it's dark, else by grade), with an explicit **None** entry at the top. Each option bakes in the
+  planning info: **name · for N min · ↑peak° at HH:MM · type** (e.g. *"Orion Nebula · for 20 min · ↑65°
+  at 23:40 · Emission nebula"*) — HA's select shows only the option string, so we use the *peak* (stable
+  through the night) rather than the live altitude (which would churn). Selecting only *picks* the target
+  (no slew) — press **Observe** to start it; selectable (offline too) day or night while idle, but
+  **Observe** stays disabled until it's dark (Sun ≤ −10°). The `suggestions` attribute carries the full
+  per-target breakdown (peak altitude + time, live altitude, visibility, up-now, grade, magnitude,
+  description, …) for a custom card.
 - Configuration (settings, grouped separately from controls) — **shown per model** (only the ones the
   telescope supports, mirroring the app): device settings **Live focus**, **Full resolution**,
   **Dithering**, **Use master dark**, **BalENS** + **BalENS level**, **Button brightness**; plus the
