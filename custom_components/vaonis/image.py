@@ -157,6 +157,12 @@ class VaonisImage(VaonisEntity, ImageEntity):
             _LOGGER.debug("no saved Vaonis capture to show", exc_info=True)
         return None
 
+    @property
+    def available(self) -> bool:
+        """Keep showing the last frame even while the scope is unreachable — async_image serves the
+        cached bytes (no live connection needed); only Unavailable if we've never loaded one."""
+        return super().available or self._cached is not None
+
     async def async_image(self) -> bytes | None:
         """Return the cached frame (fetched in the background by :meth:`_refresh`)."""
         return self._cached

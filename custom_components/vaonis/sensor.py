@@ -268,6 +268,9 @@ SENSORS: tuple[VaonisSensorDescription, ...] = (
         icon="mdi:image-search-outline",
         value_fn=lambda c: c.latest_target,
         available_fn=lambda c: bool(c.latest_target),
+        # Pairs with the Latest image, which keeps showing its cached frame while offline; the target
+        # name lives on the coordinator, so keep it visible too rather than going Unavailable.
+        always_available=True,
     ),
     VaonisSensorDescription(
         key="step",
