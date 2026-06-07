@@ -12,12 +12,16 @@ inline would risk exceeding Home Assistant's 10 s image-proxy timeout. Bytes com
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.core import callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import ExtraStoredData
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .coordinator import VaonisConfigEntry
@@ -31,6 +35,30 @@ from .pyvaonis import observation_object_name
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class _ImageRestoreData(ExtraStoredData):
+    """What we persist so the Latest image survives an HA restart while offline.
+
+    The frame *bytes* already live in the on-disk media cache; we just remember which key to reload
+    (the cache keys are hashed, so they can't be scanned for "the newest"), plus the metadata needed
+    to redraw the card without the telescope.
+    """
+
+    cache_key: str
+    source: str | None
+    target: str | None
+    last_updated: str | None  # ISO 8601
+
+    def as_dict(self) -> dict[str, Any]:
+        """Serialise for HA's restore store."""
+        return {
+            "cache_key": self.cache_key,
+            "source": self.source,
+            "target": self.target,
+            "last_updated": self.last_updated,
+        }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VaonisConfigEntry,
@@ -40,7 +68,7 @@ async def async_setup_entry(
     async_add_entities([VaonisImage(hass, entry.runtime_data)])
 
 
-class VaonisImage(VaonisEntity, ImageEntity):
+class VaonisImage(VaonisEntity, ImageEntity, RestoreEntity):
     """The most recent telescope frame (live while observing, else the newest saved capture)."""
 
     _attr_translation_key = "image"
@@ -55,6 +83,7 @@ class VaonisImage(VaonisEntity, ImageEntity):
         self._source: str | None = None
         self._target: str | None = None
         self._frame_path: str | None = None  # FTP path of the last-fetched frame, for the cache key
+        self._cache_key: str | None = None  # disk-cache key of the shown frame (for restore)
         self._media_cache: MediaCache | None = None
         self._refreshing = False
         self._stale = False
@@ -70,11 +99,48 @@ class VaonisImage(VaonisEntity, ImageEntity):
         )  # idle — the transition itself triggers one refresh to the newest capture
 
     async def async_added_to_hass(self) -> None:
-        """Kick off the first fetch so a frame is loaded without waiting for the next status push."""
+        """Restore the last frame from the disk cache, then kick off a fresh fetch."""
         await super().async_added_to_hass()
         self._media_cache = get_media_cache(self.hass)
+        await self._restore_cached_frame()
         self._signature = self._signature_now()
         self._request_refresh()
+
+    @property
+    def extra_restore_state_data(self) -> _ImageRestoreData | None:
+        """Persist the shown frame's cache key + metadata so it survives a restart while offline."""
+        if not self._cache_key:
+            return None
+        last_updated = (
+            self._attr_image_last_updated.isoformat() if self._attr_image_last_updated else None
+        )
+        return _ImageRestoreData(self._cache_key, self._source, self._target, last_updated)
+
+    async def _restore_cached_frame(self) -> None:
+        """Reload the last-shown frame from the on-disk cache (so it's there even before/without a
+        live connection). A successful live fetch overwrites it moments later when online."""
+        if self._media_cache is None:
+            return
+        last = await self.async_get_last_extra_data()
+        if last is None:
+            return
+        stored = last.as_dict()
+        key = stored.get("cache_key")
+        if not key or self._cached is not None:
+            return
+        cached = await self._media_cache.get(key)
+        if cached is None:
+            return
+        self._cached = cached
+        self._cache_key = key
+        self._source = stored.get("source")
+        self._target = stored.get("target")
+        if self._target:
+            self.coordinator.latest_target = self._target
+        parsed = dt_util.parse_datetime(stored.get("last_updated") or "")
+        self._attr_image_last_updated = parsed or dt_util.utcnow()
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()  # let the Latest target sensor pick up the name
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -110,9 +176,8 @@ class VaonisImage(VaonisEntity, ImageEntity):
                     # especially each live frame during an observation, like the app does.
                     entry = self.coordinator.config_entry
                     if self._media_cache is not None and self._frame_path and entry:
-                        await self._media_cache.put(
-                            frame_key(entry.entry_id, self._frame_path), data
-                        )
+                        self._cache_key = frame_key(entry.entry_id, self._frame_path)
+                        await self._media_cache.put(self._cache_key, data)
                 if target_changed:  # refresh the Latest target sensor, which reads the coordinator
                     self.coordinator.async_update_listeners()
         finally:
