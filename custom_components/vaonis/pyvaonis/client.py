@@ -449,9 +449,19 @@ class VaonisClient:
         return [r for r in result if isinstance(r, dict)] if isinstance(result, list) else []
 
     async def start_autoinit(
-        self, latitude: float, longitude: float, *, skip_auto_focus: bool = False
+        self,
+        latitude: float,
+        longitude: float,
+        *,
+        skip_auto_focus: bool = False,
+        observatory_name: str | None = None,
     ) -> dict[str, Any]:
-        """Initialise/align the telescope at a location."""
+        """Initialise/align the telescope at a location.
+
+        ``observatory_name`` is the site label the app shows ("from observatory: …"); auto-init is the
+        call that sets it. Defaults to the scope's existing observatory name so a re-init keeps it
+        (e.g. "Oasis"), and otherwise to "Home Assistant" rather than the library's bare default.
+        """
         if not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
             raise VaonisCommandError(f"latitude/longitude out of range: {latitude},{longitude}")
         self._require_idle("start_autoinit")
@@ -460,6 +470,7 @@ class VaonisClient:
             longitude=longitude,
             time=int(time.time() * 1000),
             skip_auto_focus=skip_auto_focus,
+            observatory_name=observatory_name or self.observatory_name() or "Home Assistant",
         )
         return await self.post(const.Endpoint.START_AUTOINIT, body.model_dump(by_alias=True))
 
@@ -634,12 +645,7 @@ class VaonisClient:
             longitude=longitude,
             device_id=self.device_id,
             start_time=start_time,
-            observatory_name=(
-                (self.status.raw.get("settings") or {}).get("telescopeName")
-                if self.status
-                else None
-            )
-            or "pyvaonis",
+            observatory_name=self.observatory_name() or "Home Assistant",
             allow_solar=allow_solar,
         )
         return await self.post(const.Endpoint.START_PLAN, body.to_payload())
