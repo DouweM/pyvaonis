@@ -134,6 +134,19 @@ def test_autoinit_failure_on_stopped_current_op() -> None:
     assert failure[1] == "Not enough stars"
 
 
+def test_autoinit_failure_suppressed_while_op_running() -> None:
+    from pyvaonis.labels import autoinit_failure
+
+    # A live op (e.g. closing the arm) owns the headline; the past init failure isn't surfaced under it.
+    raw = {
+        "initialized": False,
+        "currentOperation": {"type": "PARK", "stopped": False},
+        "previousOperations": {"autoInit": {"error": {"name": "GENERAL.ALL_ATTEMPTS_FAILED"}}},
+    }
+    assert autoinit_failure(raw) is None
+    assert summarize(raw) == "Closing arm"
+
+
 def test_autoinit_failure_none_when_running_or_done() -> None:
     from pyvaonis.labels import autoinit_failure
 

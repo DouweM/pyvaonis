@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 from collections.abc import Awaitable
 from collections.abc import Callable
 from typing import Any
@@ -92,6 +93,8 @@ class EngineIO3Client:
         self._reader: asyncio.Task[None] | None = None
         self._pinger: asyncio.Task[None] | None = None
         self._ping_interval = 25.0
+        self._ping_timeout = 60.0
+        self._last_rx = 0.0  # monotonic time of the last frame received (for dead-link detection)
         self.connected = False
 
     def on(self, event: str, handler: Handler) -> None:
@@ -122,9 +125,11 @@ class EngineIO3Client:
                 _LOGGER.debug("eio3 handshake recv %s: %.200s", kind, msg.data)
                 if kind == "open":
                     self._ping_interval = float(payload.get("pingInterval", 25000)) / 1000.0
+                    self._ping_timeout = float(payload.get("pingTimeout", 60000)) / 1000.0
                     break
         await self._ws.send_str("40")  # Socket.IO CONNECT to default namespace
         self.connected = True
+        self._last_rx = time.monotonic()
         self._reader = asyncio.create_task(self._read_loop())
         self._pinger = asyncio.create_task(self._ping_loop())
 
@@ -151,6 +156,19 @@ class EngineIO3Client:
     async def _ping_loop(self) -> None:
         while self.connected and self._ws is not None and not self._ws.closed:
             await asyncio.sleep(self._ping_interval)
+            # Dead-link detection: a clean close ends the reader, but an abrupt drop (scope powered
+            # off, AP vanished) leaves a half-open socket the reader blocks on forever. If we've heard
+            # nothing within the Engine.IO liveness bound, force-close so the reader exits and the
+            # coordinator notices the disconnect (and reconnects when the scope returns).
+            if time.monotonic() - self._last_rx > self._ping_interval + self._ping_timeout:
+                _LOGGER.warning(
+                    "eio3 link silent for >%.0fs; closing dead connection",
+                    self._ping_interval + self._ping_timeout,
+                )
+                self.connected = False
+                with contextlib.suppress(Exception):
+                    await self._ws.close()
+                break
             try:
                 await self._ws.send_str("2")
             except Exception:
@@ -159,6 +177,7 @@ class EngineIO3Client:
     async def _read_loop(self) -> None:
         assert self._ws is not None
         async for msg in self._ws:
+            self._last_rx = time.monotonic()  # any frame proves the link is alive
             if msg.type != aiohttp.WSMsgType.TEXT:
                 continue
             kind, payload = decode_frame(msg.data)

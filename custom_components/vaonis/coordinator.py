@@ -95,9 +95,10 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
     def _active_init_failure(self) -> tuple[str | None, str] | None:
         """The current (unacknowledged) init failure as ``(short, detail)``, or None.
 
-        Surfaces ``previousOperations.autoInit.error`` (which the firmware leaves after a failed init,
-        and which the status headline would otherwise show as plain "Idle"). Clears once the user
-        takes the next action (Close arm, Initialize again, …) — see :meth:`_ack_init_failure`."""
+        Surfaces the failed auto-init's error (which the status headline would otherwise show as plain
+        "Idle"/"Not initialized"), but only while idle — a live operation owns the headline. Clears
+        once the user takes the next action (Close arm, Initialize again, …), which acknowledges the
+        failure showing at the time, so the post-action idle state reads "Not initialized"."""
         failure = self.client.autoinit_failure()
         if failure is None or failure[0] == self._init_failure_ack:
             return None
@@ -117,13 +118,6 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
             return None
         return f"Initialization failed: {active[0]}" if active[0] else "Initialization failed"
 
-    def _ack_init_failure(self) -> None:
-        """Dismiss the currently-shown init failure (called after any control action)."""
-        failure = self.client.autoinit_failure()
-        if failure and failure[0] != self._init_failure_ack:
-            self._init_failure_ack = failure[0]
-            self.async_update_listeners()
-
     def _handle_status(self, status: VaonisStatus) -> None:
         """Receive a pushed status from the telescope."""
         self.async_set_updated_data(status)
@@ -136,13 +130,17 @@ class VaonisCoordinator(DataUpdateCoordinator[VaonisStatus]):
         phone can take over again right after. Release failures (e.g. the link dropping after a
         shutdown) are ignored.
         """
+        # Taking any action means the user has moved past a shown init failure: capture it now (while
+        # it's still surfaced) so the post-action idle state reads "Not initialized", not the failure.
+        pending_failure = self.client.autoinit_failure()
         await self.client.take_control()
         try:
             return await action(self.client)
         finally:
             with contextlib.suppress(VaonisError):
                 await self.client.release_control()
-            self._ack_init_failure()  # taking any action moves past a prior init failure
+            if pending_failure:
+                self._init_failure_ack = pending_failure[0]
 
     async def _async_update_data(self) -> VaonisStatus:
         """Connect (once), read-only; returns the current status. Control is taken on demand."""

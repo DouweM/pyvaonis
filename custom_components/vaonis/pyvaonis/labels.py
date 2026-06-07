@@ -148,10 +148,18 @@ def autoinit_failure(raw: dict[str, Any] | None) -> tuple[str, str | None, str] 
     if not raw or raw.get("initialized") is True:
         return None
     cur = raw.get("currentOperation")
-    if isinstance(cur, dict) and cur.get("type") == "AUTO_INIT":
-        if not cur.get("stopped"):
-            return None  # an init is currently in progress
-        op = cur  # a stopped auto-init already carries the error — catch it before it's archived
+    if isinstance(cur, dict) and not cur.get("stopped"):
+        return (
+            None  # a live operation (init, park, …) owns the headline; don't surface a past failure
+        )
+    # Idle, or a stopped op: the error sits on the just-stopped auto-init, or — once archived — in
+    # previousOperations.autoInit. Read whichever holds it so we don't lag behind the move.
+    if (
+        isinstance(cur, dict)
+        and cur.get("type") == "AUTO_INIT"
+        and isinstance(cur.get("error"), dict)
+    ):
+        op = cur
     else:
         op = (raw.get("previousOperations") or {}).get("autoInit")
     if not isinstance(op, dict) or not isinstance(op.get("error"), dict):
