@@ -69,17 +69,30 @@ AUTOINIT_ERROR_SHORT: dict[str, str] = {
     "GENERAL.AUTO_FOCUS_FAILED": "Autofocus failed",
 }
 
-# StellinaOperationType -> banner label (instrument_* / *_title).
+# StellinaOperationType -> in-progress status label, matching the app's home-screen badge wording
+# (instrument_*). Note PARK/OPEN use the running-state verb ("Closing arm"), not the button label
+# ("Close the arm" = instrument_park).
 OPERATION_TYPE_LABELS: dict[str, str] = {
     "AUTO_INIT": "Initialization",
     "OBSERVATION": "Observation in progress",
-    "PARK": "Close the arm",
+    "PARK": "Closing arm",
+    "OPEN": "Opening arm",
     "PLAN": "Plan in progress",
     "GENERATE_DARK": "Generating dark frames",
     "SUN_MODE": "Solar mode",
     "SUN_OBSERVATION": "Solar mode",
     "STORAGE_ACQUISITION": "Raw acquisition",
     "PLAYLIST": "Playlist in progress",
+}
+
+# StellinaSunModeState -> sub-line label (sunMode_state_*), shown after "Solar mode" while in sun mode.
+SUN_MODE_STATE_LABELS: dict[str, str] = {
+    "CLOSING_ARM": "Closing the arm",
+    "OPENING_ARM": "Moving arm to position",
+    "WAITING_FOR_FILTER_INSTALLATION": "Waiting for user",
+    "WAITING_FOR_ORIENTATION": "Waiting for user",
+    "WAITING_FOR_FILTER_REMOVAL": "Waiting for user",
+    "WAITING_AFTER_OBSERVATION_FAILED": "Waiting for user",
 }
 
 
@@ -181,5 +194,9 @@ def summarize(raw: dict[str, Any] | None) -> str:
                 obj = (tgt.get("target") or {}).get("objectName") or "?"
                 return f"{name} — {state} ({obj}, {i + 1}/{len(targets)})"
         return f"{name} — {state}"
+
+    if op_type == "SUN_MODE":
+        state = SUN_MODE_STATE_LABELS.get(op.get("state") or "")
+        return f"Solar mode: {state}" if state else "Solar mode"
 
     return OPERATION_TYPE_LABELS.get(op_type or "", "Busy")

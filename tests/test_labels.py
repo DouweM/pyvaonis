@@ -77,7 +77,16 @@ def test_plan_summary_with_current_target() -> None:
 
 
 def test_park_label() -> None:
-    assert summarize({"currentOperation": {"type": "PARK"}}) == "Close the arm"
+    # The running-state wording, matching the app's badge (not the "Close the arm" button label).
+    assert summarize({"currentOperation": {"type": "PARK"}}) == "Closing arm"
+
+
+def test_sun_mode_state() -> None:
+    assert summarize({"currentOperation": {"type": "SUN_MODE"}}) == "Solar mode"
+    assert (
+        summarize({"currentOperation": {"type": "SUN_MODE", "state": "CLOSING_ARM"}})
+        == "Solar mode: Closing the arm"
+    )
 
 
 def test_autoinit_failure_not_enough_stars() -> None:
