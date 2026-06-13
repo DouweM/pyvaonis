@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from datetime import timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 
 from .coordinator import VaonisConfigEntry
 from .coordinator import VaonisCoordinator
@@ -136,6 +140,25 @@ class VaonisDarkSensor(VaonisEntity, BinarySensorEntity):
         """Always available — darkness is computed from HA's location/clock, not the telescope, so
         it stays useful (e.g. for planning) even while the scope is disconnected."""
         return True
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh on a clock timer, not just on coordinator updates.
+
+        The value depends on the Sun's position, not telescope data. As a
+        CoordinatorEntity its state is only written when the coordinator pushes
+        an update; while the scope is disconnected those stop, which would
+        freeze this sensor at its last value (e.g. stuck "on" all day). A short
+        interval re-evaluates is_dark so the dark/light transition lands on time
+        regardless of connection state.
+        """
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._async_refresh, timedelta(minutes=1))
+        )
+
+    @callback
+    def _async_refresh(self, now: datetime) -> None:
+        self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
